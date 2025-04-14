@@ -18,12 +18,28 @@ import requests
 import json
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 ##read input question from bash
 if len(sys.argv) < 2:
     print("Usage: python hstranslate.py \"Your question here\"")
     sys.exit(1)
 
 input_text = sys.argv[1]
+=======
+logging.basicConfig(format="%(levelname)s - %(name)s -  %(message)s", level=logging.WARNING)
+logging.getLogger("haystack").setLevel(logging.DEBUG)
+
+tracing.tracer.is_content_tracing_enabled = True # to enable tracing/logging content (inputs/outputs)
+tracing.enable_tracing(LoggingTracer(tags_color_strings={"haystack.component.input": "\x1b[1;31m", "haystack.component.name": "\x1b[1;34m"}))
+
+#read input question from bash
+#if len(sys.argv) < 2:
+#    print("Usage: python hstranslate.py \"Your question here\"")
+#    sys.exit(1)
+#input_text = sys.argv[1]
+
+input_text = "Wieviel Geld wurde am 2025-02-09 überwiesen?" 
+>>>>>>> Stashed changes
 =======
 logging.basicConfig(format="%(levelname)s - %(name)s -  %(message)s", level=logging.WARNING)
 logging.getLogger("haystack").setLevel(logging.DEBUG)
@@ -257,12 +273,16 @@ routes = [
 
     #{
     #    "condition": "{{'api' in replies[0]}}", 
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
     #    "output": "{{question}}",
     #    "output_name": "goto_api",
     #    "output_type": str,
     #},
 
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
 # (without the previous block or fallback) If no result from sql, error message 
     {
@@ -296,6 +316,8 @@ routes = [
     #    "output_type": str,
     #},
 =======
+=======
+>>>>>>> Stashed changes
     {
         "condition": "{{api_caller.queries[0] is not none and api_caller.queries[0] != ''}}",
         "output": "{{question}}",
@@ -309,6 +331,7 @@ routes = [
         "output_name": "answer",
         "output_type": str,
     },
+<<<<<<< Updated upstream
 >>>>>>> Stashed changes
 
 # (without the previous block or fallback) If no result from api, error message 
@@ -351,11 +374,14 @@ routes = [
     #    "output_name": "final_answer",
     #    "output_type": str,
     #},
+=======
+>>>>>>> Stashed changes
 
 ]
 
 router = ConditionalRouter(routes)
 
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
 # Initialize SQLQuery and RESTCall components
 sql_query = SQLQuery('[INSERT]')  # Connect to the database
@@ -372,6 +398,8 @@ final_pipe = Pipeline()
 
 # Add components to the pipeline
 =======
+=======
+>>>>>>> Stashed changes
 #mini_pipe = Pipeline()
 #mini_pipe.add_component("router_prompt", PromptBuilder(template=prompt_template_router))
 #mini_pipe.add_component("routerllm", OllamaGenerator(model="gemma3:12b"))
@@ -391,10 +419,13 @@ final_pipe.add_component("sql_prompt", PromptBuilder(sql_prompt))
 final_pipe.add_component("api_prompt", PromptBuilder(api_prompt))
 final_pipe.add_component("call_prompt", PromptBuilder(call_prompt))
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 final_pipe.add_component("fallback_prompt", PromptBuilder(fallback_prompt))
 
 #final_pipe.add_component("rag_prompt", PromptBuilder(rag_prompt))
 =======
+=======
+>>>>>>> Stashed changes
 #final_pipe.add_component("fallback_prompt", PromptBuilder(fallback_prompt)
 >>>>>>> Stashed changes
 
@@ -404,9 +435,12 @@ final_pipe.add_component("sqlllm", OllamaGenerator(model="gemma3:12b"))
 final_pipe.add_component("apillm", OllamaGenerator(model="gemma3:12b"))
 final_pipe.add_component("callllm", OllamaGenerator(model="gemma3:12b"))
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 final_pipe.add_component("fallback_llm", OllamaGenerator(model="gemma3:12b"))
 
 =======
+=======
+>>>>>>> Stashed changes
 #final_pipe.add_component("fallback_llm", OllamaGenerator(model="gemma3:12b"))
 >>>>>>> Stashed changes
 #final_pipe.add_component("raglllm", OllamaGenerator(model="gemma3:12b"))
@@ -419,6 +453,10 @@ final_pipe.add_component("api_caller", api_caller)
 # Connect pipeline components
 final_pipe.connect("router_prompt", "routerllm")
 final_pipe.connect("routerllm.replies", "router.routerllm")
+<<<<<<< Updated upstream
+=======
+
+>>>>>>> Stashed changes
 
 final_pipe.connect("router.goto_sql", "sql_prompt.question")
 final_pipe.connect("sql_prompt", "sqlllm")
@@ -427,6 +465,9 @@ final_pipe.connect("sqlllm.replies", "sql_querier")
 =======
 final_pipe.connect("sqlllm.replies", "sql_querier.queries")
 final_pipe.connect("sql_querier.results", "router.sql_querier")
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 
 final_pipe.connect("router.goto_api", "api_prompt.question")
@@ -435,6 +476,7 @@ final_pipe.connect("apillm.replies", "call_prompt.api_name")
 final_pipe.connect("call_prompt", "callllm")
 final_pipe.connect("callllm.replies", "api_caller.queries")
 
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
 final_pipe.connect("router.go_to_fallback", "fallback_prompt.question")
 final_pipe.connect("fallback_prompt", "fallback_llm")
@@ -458,6 +500,18 @@ final_pipe.connect("api_caller.results", "router.api_caller")
 #final_pipe.draw(path=".")
     #result = final_pipe.run({ "router":{"question": question}, "sql_prompt": {"columns": columns} })
 
+=======
+final_pipe.connect("router.goto_api", "api_prompt.question")
+final_pipe.connect("api_prompt", "apillm")
+final_pipe.connect("apillm.replies", "call_prompt.api_name")
+final_pipe.connect("call_prompt", "callllm")
+final_pipe.connect("callllm.replies", "api_caller.queries")
+final_pipe.connect("api_caller.results", "router.api_caller")
+
+#final_pipe.draw(path=".")
+    #result = final_pipe.run({ "router":{"question": question}, "sql_prompt": {"columns": columns} })
+
+>>>>>>> Stashed changes
 result = final_pipe.run({
   "router": {"question": question},
   "router_prompt": {"question": question}, 
@@ -492,4 +546,7 @@ print(result)
 #
 #except PipelineRuntimeError as e:
 #    print(f"SQL Query is malformed. Try again.")
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
