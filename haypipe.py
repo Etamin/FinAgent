@@ -1,9 +1,9 @@
 from haystack.components.builders.prompt_builder import PromptBuilder
 from haystack_integrations.components.generators.ollama import OllamaGenerator
 from haystack import Pipeline
-from haystack_integrations.components.retrievers import PDFRetriever
-from haystack_integrations.components.sql import SQLQueryComponent
-from haystack_integrations.components.api_caller import APICaller
+#from haystack_integrations.components.retrievers import PDFRetriever
+#from haystack_integrations.components.sql import SQLQueryComponent
+#from haystack_integrations.components.api_caller import APICaller
 from haystack.components.routers import ConditionalRouter
 #from haystack.document_stores import FAISSDocumentStore
 #from haystack.nodes import RAGenerator, DensePassageRetriever
@@ -16,13 +16,22 @@ import sys
 import sqlite3
 import requests
 import json
+import logging
+import logging
+from haystack import tracing
+from haystack.tracing.logging_tracer import LoggingTracer
 
+logging.basicConfig(format="%(levelname)s - %(name)s -  %(message)s", level=logging.WARNING)
+logging.getLogger("haystack").setLevel(logging.DEBUG)
+
+tracing.tracer.is_content_tracing_enabled = True # to enable tracing/logging content (inputs/outputs)
+tracing.enable_tracing(LoggingTracer(tags_color_strings={"haystack.component.input": "\x1b[1;31m", "haystack.component.name": "\x1b[1;34m"}))
 ##read input question from bash
-if len(sys.argv) < 2:
-    print("Usage: python hstranslate.py \"Your question here\"")
-    sys.exit(1)
+#if len(sys.argv) < 2:
+#    print("Usage: python hstranslate.py \"Your question here\"")
+#    sys.exit(1)
 
-input_text = sys.argv[1]
+input_text = "What amount of money was transferred on transaction ID on 2025-02-09?" #sys.argv[1]
 
 ###TRANSLATION
 ##translation templates
@@ -70,26 +79,16 @@ class SQLQuery:
 
 ##prompt to gen SQL Query
 
-# Define database schema, [INSERT] if we use another one
-transaction_columns = """
-Transaction_ID VARCHAR(40) not null primary key,
-Time INT,
-Client_ID VARCHAR(12) references Source,
-Beneficiary_ID VARCHAR(16) references Beneficiary,
-Amount Float,
-Currency VARCHAR(3),
-Transaction_Type VARCHAR(20) not null
-"""
+
+columns = "ROWID;transaction_id;account_id;date;amount;description;type"
+
 
 # Modify table name if needed [INSERT]
 sql_prompt = """Please generate an SQL query. The query should answer the following Question: {{question}};
-            The query is to be answered for the table is called 'Transactions' with the following  
+            The query is to be answered for the table 'Transactions' with the following  
             Columns: {{columns}};
             Answer should only include a SQL query string without format like ```sql, no explnations or notes. You should only do question to SQL query translation
             Answer starts with "SELECT":"""
-
-
-sql_query = SQLQuery('[INSERT].db')
 
 
 ##API
@@ -173,20 +172,19 @@ api_list = """[GetAccountIDbyName, GetAccountNamebyID, GetAccount]"""
 
 ##ROUTER
 
-# Prompt template for port (sql/api/rag) classification
+# Prompt template for port (sql/api/rag) classification [INSERT]
 prompt_template_router = """
 Create a classification result from the question: {{question}}.
 
-Only if the question is asking about how much did the account ID transfer, please answer "sql".
-Only if the question is asking about what is an account's ID of a name, please answer "api".
-Only if the question is asking about [INSERT] , please answer "rag".
-Only if the question is asking about anything else, answer "scope".
+if the question is about account balance (using account name), transactions, payment, answer "sql".
+if the question is about an account name or profiles, answer "api".
+if the question is about [INSERT], answer "rag".
+if the question is about anything else, answer "scope".
 
 Only use information that is present in the passage. 
 Make sure your response is a simple string that only can be 'sql' or 'api' or "rag" or "scope". No explanation or notes.
 Answer:
 """
-
 
 routes = [
     {
@@ -196,27 +194,17 @@ routes = [
         "output_type": str,
     },
 
-# SHOULD WE IMPLEMENT THE CHECKER (FALLBACK PROMPT) HERE??
     {
-        "condition": "{{sql_result is not None and sql_result != ''}}", 
+        "condition": "{{sql_result is not none and sql_result != ''}}", 
         "output": "{{sql_result}}",
-        "output_name": "final_answer",
-        "output_type": str,
+        "output_name": "sql_result",
+        "output_type": List[str],
     },
 
-# Go to API, if no result from SQL. Make it more failsafe. DO WE NEED THAT??
-    #{
-    #    "condition": "{{sql_result is None or sql_result == ''}}", # after no result from sql, check api
-    #    "output": "{{question}}",
-    #    "output_name": "goto_api",
-    #    "output_type": str,
-    #},
-
-# (without the previous block or fallback) If no result from sql, error message 
     {
-        "condition": "{{sql_result is None or sql_result == ''}}",
+        "condition": "{{sql_result is none or sql_result == ''}}",
         "output": "'Information not found in scope of this demo'",
-        "output_name": "final_answer",
+        "output_name": "sql_result",
         "output_type": str,
     },
 
@@ -228,34 +216,25 @@ routes = [
         "output_type": str,
     },
 
-# SHOULD WE IMPLEMENT A CHECKER (FALLBACK PROMPT) HERE??
     {
-        "condition": "{{api_result is not None and api_result != ''}}",
+        "condition": "{{api_result is not none and api_result != ''}}",
         "output": "{{api_result}}",
         "output_name": "final_answer",
         "output_type": str,
     },
 
-# Go to RAG, if no result from SQL and/or API. Make it more failsafe. DO WE NEED THAT??
-    #{
-    #    "condition": "{{api_result is None or api_result == ''}}",
-    #    "output": "{{question}}",
-    #    "output_name": "goto_rag",
-    #    "output_type": str,
-    #},
-
 # (without the previous block or fallback) If no result from api, error message 
     {
-        "condition": "{{api_result is None or api_result == ''}}",
+        "condition": "{{api_result is none or api_result == ''}}",
         "output": "'Information not found in scope of this demo'",
         "output_name": "final_answer",
         "output_type": str,
     },
 
 
-# SHOULD WE IMPLEMENT A CHECKER (FALLBACK PROMPT) HERE??
+
     {
-        "condition": "{{rag_result is not None and rag_result != ''}}", # If router response contains "rag", route to rag pipeline
+        "condition": "{{rag_result is not none and rag_result != ''}}", # If router response contains "rag", route to rag pipeline
         "output": "{{rag_result}}",
         "output_name": "final_answer",
         "output_type": str,
@@ -263,7 +242,7 @@ routes = [
 
 # (without fallback) If no result from rag, error message 
     {
-        "condition": "{{rag_result is None or rag_result == ''}}",
+        "condition": "{{rag_result is none or rag_result == ''}}",
         "output": "'Information not found in scope of this demo'", # answer is not found in any of the provided sources. Return error message
         "output_name": "final_answer",
         "output_type": str,
@@ -290,14 +269,13 @@ routes = [
 router = ConditionalRouter(routes)
 
 # Initialize SQLQuery and RESTCall components
-sql_query = SQLQuery('[INSERT]')  # Connect to the database
+sql_query = SQLQuery('bank_demo.db') # Connect to the database
 api_caller = RESTCall()  # Create API calling component
 
 ##FALLBACK
-fallback_prompt="""User entered a query that cannot be answerwed with the given information.
-                                            The query was: {{question}}.
-                                            Please try to answer the question:"""
-
+#fallback_prompt="""User entered a query that cannot be answerwed with the given information.
+#                                            The query was: {{question}}.
+#                                            Please try to answer the question:"""
 
 ##ROUTER PIPELINE
 final_pipe = Pipeline()
@@ -308,7 +286,7 @@ final_pipe.add_component("router_prompt", PromptBuilder(prompt_template_router))
 final_pipe.add_component("sql_prompt", PromptBuilder(sql_prompt))
 final_pipe.add_component("api_prompt", PromptBuilder(api_prompt))
 final_pipe.add_component("call_prompt", PromptBuilder(call_prompt))
-final_pipe.add_component("fallback_prompt", PromptBuilder(fallback_prompt))
+#final_pipe.add_component("fallback_prompt", PromptBuilder(fallback_prompt))
 
 #final_pipe.add_component("rag_prompt", PromptBuilder(rag_prompt))
 
@@ -317,7 +295,7 @@ final_pipe.add_component("routerllm", OllamaGenerator(model="gemma3:12b"))
 final_pipe.add_component("sqlllm", OllamaGenerator(model="gemma3:12b"))
 final_pipe.add_component("apillm", OllamaGenerator(model="gemma3:12b"))
 final_pipe.add_component("callllm", OllamaGenerator(model="gemma3:12b"))
-final_pipe.add_component("fallback_llm", OllamaGenerator(model="gemma3:12b"))
+#final_pipe.add_component("fallback_llm", OllamaGenerator(model="gemma3:12b"))
 
 #final_pipe.add_component("raglllm", OllamaGenerator(model="gemma3:12b"))
 
@@ -332,7 +310,8 @@ final_pipe.connect("routerllm.replies", "router.replies")
 
 final_pipe.connect("router.goto_sql", "sql_prompt.question")
 final_pipe.connect("sql_prompt", "sqlllm")
-final_pipe.connect("sqlllm.replies", "sql_querier")
+final_pipe.connect("sqlllm.replies", "sql_querier.queries")
+final_pipe.connect("sql_querier.results", "router.sql_result")
 
 final_pipe.connect("router.goto_api", "api_prompt.question")
 final_pipe.connect("api_prompt", "apillm")
@@ -340,14 +319,21 @@ final_pipe.connect("apillm.replies", "call_prompt.api_name")
 final_pipe.connect("call_prompt", "callllm")
 final_pipe.connect("callllm.replies", "api_caller.queries")
 
-final_pipe.connect("router.go_to_fallback", "fallback_prompt.question")
-final_pipe.connect("fallback_prompt", "fallback_llm")
+#final_pipe.connect("router.go_to_fallback", "fallback_prompt.question")
+#final_pipe.connect("fallback_prompt", "fallback_llm")
 
 #final_pipe.connect("router.goto_rag", "rag_prompt.question") # the rag part of the pipeline relies on rag pipeline
 #final_pipe.connect("rag_prompt", "ragllm")
 #final_pipe.connect("ragllm.replies", "rag_prompt.rag_retriever")
 
 # Run pipeline and print final_answer
-result = final_pipe.run({
-})
-print(result.get("final_answer"))
+
+question = input_text
+result = final_pipe.run({"sql_prompt": {"question": question,
+                                                  "columns": columns},
+                                       "router": {"question": question}})
+
+#result = final_pipe.run({
+#    "router_prompt":{"question": question}, 
+#})
+#print(result.get("final_answer"))
