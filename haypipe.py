@@ -251,7 +251,7 @@ if "sql" in direction:
         result = sql_pipe.run({
         "sql_prompt": {"question": question, "columns": columns},})
         result= result['sql_querier']['results']  
-        if "none" in result.str.lower():
+        if "none" in str(result).lower():
             result = ragpipe(question) #If sql retrieves no answer, go to rag (questions to similar)
     except PipelineRuntimeError as e: #if runtimeerror because no cql result, go to rag (questions to similar)
         print(f"Pipeline failed with error: {e}") 
