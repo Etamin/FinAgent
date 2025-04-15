@@ -37,12 +37,36 @@ tracing.enable_tracing(LoggingTracer(tags_color_strings={"haystack.component.inp
 
 input_text = "Wéi héich waren d'Nettoverkaafsnimm no GAAP am Joer 2022?" 
 
-def startpoint(input_text):
+def translate_to_english(input_text):
     ###TRANSLATION
     ##translation templates
     mttemplate_de = "Translate {{query}} to German. Just answer with the translated text. Dates should always follow the format YYYY-MM-DD." #without pivoting, comment out
     mttemplate_en = "Translate {{query}} to English. Just answer with the translated text. Dates should always follow the format YYYY-MM-DD."
 
+    mtpipe = Pipeline()
+    ##translation components
+    mtpipe.add_component("prompt_builder", PromptBuilder(template=mttemplate_de, required_variables=[]))#without pivoting, comment out
+    mtpipe.add_component("llm", OllamaGenerator(model="gemma3:12b"))#without pivoting, comment out
+    mtpipe.add_component("prompt_builder1", PromptBuilder(template=mttemplate_en, required_variables=[]))
+    mtpipe.add_component("llm1", OllamaGenerator(model="gemma3:12b"))
+
+    mtpipe.connect("prompt_builder", "llm")#without pivoting, comment out
+    mtpipe.connect("prompt_builder1", "llm1")
+
+    ##translation output
+    #first check language. Run if it is not English. Otherwise use English output like it is. 
+    if detect(input_text) == 'en':
+        question = input_text
+    else:
+        output = mtpipe.run({"prompt_builder":{"query": input_text}})#without pivoting, comment out
+        output1 = output["llm"]["replies"][0]#without pivoting, comment out
+        output2= mtpipe.run({"prompt_builder1":{"query": output1}})#without pivoting, change output1 to input_text
+        question = output2["llm1"]["replies"][0]  
+        return question
+
+def classify_direction(question):
+    ###Decide which interface to use and output the direction
+    routpipe = Pipeline()
 
     # Prompt template for port (sql/api/rag) classification [INSERT]
     #TO DO: BETTER PROMPT!!!
@@ -58,29 +82,12 @@ def startpoint(input_text):
     Answer:
     """
 
-    prepipe = Pipeline()
-    ##translation components
-    prepipe.add_component("prompt_builder", PromptBuilder(template=mttemplate_de, required_variables=[]))#without pivoting, comment out
-    prepipe.add_component("llm", OllamaGenerator(model="gemma3:12b"))#without pivoting, comment out
-    prepipe.add_component("prompt_builder1", PromptBuilder(template=mttemplate_en, required_variables=[]))
-    prepipe.add_component("llm1", OllamaGenerator(model="gemma3:12b"))
-    prepipe.add_component("rout_prompt", PromptBuilder(template=routprompt, required_variables=[]))
-    prepipe.add_component("routllm", OllamaGenerator(model="gemma3:12b"))
+    routpipe.add_component("rout_prompt", PromptBuilder(template=routprompt, required_variables=[]))
+    routpipe.add_component("routllm", OllamaGenerator(model="gemma3:12b"))
 
-    prepipe.connect("prompt_builder", "llm")#without pivoting, comment out
-    prepipe.connect("prompt_builder1", "llm1")
-    prepipe.connect("rout_prompt", "routllm")
+    routpipe.connect("rout_prompt", "routllm")
 
-    ##translation output
-    #first check language. Run if it is not English. Otherwise use English output like it is. 
-    if detect(input_text) == 'en':
-        question = input_text
-    else:
-        output = prepipe.run({"prompt_builder":{"query": input_text}})#without pivoting, comment out
-        output1 = output["llm"]["replies"][0]#without pivoting, comment out
-        output2= prepipe.run({"prompt_builder1":{"query": output1}})#without pivoting, change output1 to input_text
-        question = output2["llm1"]["replies"][0]  
-    direction = prepipe.run({"rout_prompt":{"question":question}})
+    direction = routpipe.run({"rout_prompt":{"question":question}})
     direction = direction["routllm"]["replies"][0]  
     return question, direction
 
@@ -295,17 +302,18 @@ def nl_answer(question, result):
     replies = outresult['nllm']['replies']
     print(f"\n\n\nAnswer to the Question is: "+ replies[0] + "\n\n\n")
 
-question, direction = startpoint(input_text)
+question = translate_to_english(input_text)
+direction = classify_direction(question)
 
 
 ###MAIN ACTION
 if "sql" in direction:
     result = sqlpipe(question)
 
-if "api" in direction:
+elif "api" in direction:
     result = apipipe(question)
 
-if "rag" in direction:
+else:
     result = ragpipe(question)
     
 final_output = nl_answer(question, result)
