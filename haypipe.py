@@ -35,55 +35,55 @@ tracing.enable_tracing(LoggingTracer(tags_color_strings={"haystack.component.inp
 #    sys.exit(1)
 #input_text = sys.argv[1]
 
-input_text = 'How high where the Net Sales for GAAP in 2022?' 
+input_text = "Wéi héich waren d'Nettoverkaafsnimm no GAAP am Joer 2022?" 
 
-###TRANSLATION
-##translation templates
-mttemplate_de = "Translate {{query}} to German. Just answer with the translated text. Dates should always follow the format YYYY-MM-DD." #without pivoting, comment out
-mttemplate_en = "Translate {{query}} to English. Just answer with the translated text. Dates should always follow the format YYYY-MM-DD."
-
-
-# Prompt template for port (sql/api/rag) classification [INSERT]
-#TO DO: BETTER PROMPT!!!
-routprompt = """
-Create a classification result from the question: {{question}}.
-
-Only if the question is about account balance (with account name), transactions (like transfer, money movements), payment, answer "sql".
-Only if the question is about an account name or profiles, answer "api". Number can also refer to ID.
-Only if the question is about something else, answer "rag".
-
-Only use information that is present in the passage. 
-Make sure your response is a simple string that only can be 'sql' or 'api' or "rag". No explanation or notes.
-Answer:
-"""
-
-prepipe = Pipeline()
-##translation components
-prepipe.add_component("prompt_builder", PromptBuilder(template=mttemplate_de, required_variables=[]))#without pivoting, comment out
-prepipe.add_component("llm", OllamaGenerator(model="gemma3:12b"))#without pivoting, comment out
-prepipe.add_component("prompt_builder1", PromptBuilder(template=mttemplate_en, required_variables=[]))
-prepipe.add_component("llm1", OllamaGenerator(model="gemma3:12b"))
-prepipe.add_component("rout_prompt", PromptBuilder(template=routprompt, required_variables=[]))
-prepipe.add_component("routllm", OllamaGenerator(model="gemma3:12b"))
-
-prepipe.connect("prompt_builder", "llm")#without pivoting, comment out
-prepipe.connect("prompt_builder1", "llm1")
-prepipe.connect("rout_prompt", "routllm")
-
-##translation output
-#first check language. Run if it is not English. Otherwise use English output like it is. 
-if detect(input_text) == 'en':
-    question = input_text
-else:
-    output = prepipe.run({"prompt_builder":{"query": input_text}})#without pivoting, comment out
-    output1 = output["llm"]["replies"][0]#without pivoting, comment out
-    output2= prepipe.run({"prompt_builder1":{"query": output1}})#without pivoting, change output1 to input_text
-    question = output2["llm1"]["replies"][0]  
-direction = prepipe.run({"rout_prompt":{"question":question}})
-direction = direction["routllm"]["replies"][0]  
+def startpoint(input_text):
+    ###TRANSLATION
+    ##translation templates
+    mttemplate_de = "Translate {{query}} to German. Just answer with the translated text. Dates should always follow the format YYYY-MM-DD." #without pivoting, comment out
+    mttemplate_en = "Translate {{query}} to English. Just answer with the translated text. Dates should always follow the format YYYY-MM-DD."
 
 
-###SQL Query
+    # Prompt template for port (sql/api/rag) classification [INSERT]
+    #TO DO: BETTER PROMPT!!!
+    routprompt = """
+    Create a classification result from the question: {{question}}.
+
+    Only if the question is about account balance (with account name), transactions (like transfer, money movements), payment, answer "sql".
+    Only if the question is about an account name or profiles, answer "api". Number can also refer to ID.
+    Only if the question is about something else, answer "rag".
+
+    Only use information that is present in the passage. 
+    Make sure your response is a simple string that only can be 'sql' or 'api' or "rag". No explanation or notes.
+    Answer:
+    """
+
+    prepipe = Pipeline()
+    ##translation components
+    prepipe.add_component("prompt_builder", PromptBuilder(template=mttemplate_de, required_variables=[]))#without pivoting, comment out
+    prepipe.add_component("llm", OllamaGenerator(model="gemma3:12b"))#without pivoting, comment out
+    prepipe.add_component("prompt_builder1", PromptBuilder(template=mttemplate_en, required_variables=[]))
+    prepipe.add_component("llm1", OllamaGenerator(model="gemma3:12b"))
+    prepipe.add_component("rout_prompt", PromptBuilder(template=routprompt, required_variables=[]))
+    prepipe.add_component("routllm", OllamaGenerator(model="gemma3:12b"))
+
+    prepipe.connect("prompt_builder", "llm")#without pivoting, comment out
+    prepipe.connect("prompt_builder1", "llm1")
+    prepipe.connect("rout_prompt", "routllm")
+
+    ##translation output
+    #first check language. Run if it is not English. Otherwise use English output like it is. 
+    if detect(input_text) == 'en':
+        question = input_text
+    else:
+        output = prepipe.run({"prompt_builder":{"query": input_text}})#without pivoting, comment out
+        output1 = output["llm"]["replies"][0]#without pivoting, comment out
+        output2= prepipe.run({"prompt_builder1":{"query": output1}})#without pivoting, change output1 to input_text
+        question = output2["llm1"]["replies"][0]  
+    direction = prepipe.run({"rout_prompt":{"question":question}})
+    direction = direction["routllm"]["replies"][0]  
+    return question, direction
+
 @component
 class SQLQuery:
 
@@ -101,18 +101,37 @@ class SQLQuery:
         self.connection.close() 
         return {"results": results, "queries": queries}
 
+def sqlpipe(question):
+    ###SQL Query
+    # Define database schema, [INSERT] if we use another one
+    columns = "ROWID;transaction_id;account_id;date;amount;description;type"
 
-# Define database schema, [INSERT] if we use another one
-columns = "ROWID;transaction_id;account_id;date;amount;description;type"
+    # Modify table name if needed [INSERT]
+    sql_prompt = """Please generate an SQL query. The query should answer the following Question: {{question}};
+                The query is to be answered for the table is called 'transactions' with the following
+                Columns: {{columns}};
+                Answer:"""
+        
+    sql_query = SQLQuery('bank_demo.db')
 
-# Modify table name if needed [INSERT]
-sql_prompt = """Please generate an SQL query. The query should answer the following Question: {{question}};
-            The query is to be answered for the table is called 'transactions' with the following
-            Columns: {{columns}};
-            Answer:"""
+    sql_pipe= Pipeline()
+    sql_pipe.add_component("sql_prompt", PromptBuilder(sql_prompt))
+    sql_pipe.add_component("sqlllm", OllamaGenerator(model="gemma3:12b"))
+    sql_pipe.add_component("sql_querier", sql_query)
 
-            
-sql_query = SQLQuery('bank_demo.db')
+    sql_pipe.connect("sql_prompt", "sqlllm")
+    sql_pipe.connect("sqlllm.replies", "sql_querier.queries")
+    
+    try:
+        result = sql_pipe.run({
+        "sql_prompt": {"question": question, "columns": columns},})
+        result= result['sql_querier']['results']  
+        if "none" in str(result).lower():
+            result = ragpipe(question) #If sql retrieves no answer, go to rag (questions to similar)
+    except PipelineRuntimeError as e: #if runtimeerror because no cql result, go to rag (questions to similar)
+        print(f"SQL Pipeline failed with error: {e}") 
+        result = ragpipe(question)
+    return result
 
 ###API
 @component
@@ -162,103 +181,58 @@ class RESTCall:
         #response = requests.get("http://localhost:3001" + api_path, params=call["parameters"])
         return {"results": response.content.decode("utf-8"), "queries": queries[0]}
 
-#api prompt
-api_prompt = """Please select an API function calling. The calling should answer the following Question: {{question}};
-The query is to be related to a bank system and include these APIs with descriptions:
-APIs: {{apis}};
-===============
-Make sure your response is only a simple string of API name.
-Answer:"""
+def apipipe(question):
+    #api prompt
+    api_prompt = """Please select an API function calling. The calling should answer the following Question: {{question}};
+    The query is to be related to a bank system and include these APIs with descriptions:
+    APIs: {{apis}};
+    ===============
+    Make sure your response is only a simple string of API name.
+    Answer:"""
 
-# Prompt template for generating API requests
-call_prompt = """Please generate an API call. The call should answer the following Question: {{question}};
-Use this:
-Api_name: {{api_name}}
-Parameters: {{apipara}};
+    # Prompt template for generating API requests
+    call_prompt = """Please generate an API call. The call should answer the following Question: {{question}};
+    Use this:
+    Api_name: {{api_name}}
+    Parameters: {{apipara}};
 
-Use the following format:
-{{api_format}}
+    Use the following format:
+    {{api_format}}
 
-Make sure your response is a JSON object string without any format like json. Parameters should just contain the parameter value. 
-Answer:"""
+    Make sure your response is a JSON object string without any format like json. Parameters should just contain the parameter value. 
+    Answer:"""
 
-# Define API format template
-api_format = """
-{
-   "api":"apiName",
-   "parameters":{
-      "parameter1":"value1",
-      "parameter2":"value2"
-   }
-}
-"""
-
-# Define available APIs, [INSERT] if we use other ones
-api_list = """[GetAccountIDbyName, GetAccountNamebyID, GetAccount]"""
-
-transaction_columns="""
-Transaction_ID VARCHAR(40) not null primary key,
-Time INT,
-Client_ID VARCHAR(12) references Source,
-Beneficiary_ID VARCHAR(16) references Beneficiary,
-Amount Float,
-Currency VARCHAR(3),
-Transaction_Type VARCHAR(20) not null
-Source_Table VARCHAR(20)
-"""
-
-api_list="""GetAccountIDbyName,
-GetAccountNamebyID
-"""
-
-
-api_caller = RESTCall() 
-
-def ragpipe(query):
-    embedders_mapping = {
-            'gte-base': 'Alibaba-NLP/gte-base-en-v1.5',
-            'mutli-qa': 'sentence-transformers/multi-qa-mpnet-base-dot-v1',
-            'bge-base-inst': 'BAAI/bge-base-en-v1.5',
-            'alibaba-modern': 'Alibaba-NLP/gte-modernbert-base',
-            'nomic-modern': 'nomic-ai/modernbert-embed-base',
-            'modernbert-large': 'answerdotai/ModernBERT-large',
-            'multi-qa-cos': 'sentence-transformers/multi-qa-mpnet-base-cos-v1'
+    # Define API format template
+    api_format = """
+    {
+       "api":"apiName",
+       "parameters":{
+          "parameter1":"value1",
+          "parameter2":"value2"
+       }
     }
-    
-    # Parameters
-    top_k = 30
-    top_k_r = 5
-    embedder_name = embedders_mapping['gte-base']
-    llm = 'gemma3:12b'
-    # User question
-    query = question
-    # Run retriever
-    contexts = run_retriever(query, embedder_name, top_k, top_k_r)
-    result = run_generator(query, contexts, llm)
-    return result
+    """
 
-###MAIN ACTION
-if "sql" in direction:
-    sql_pipe= Pipeline()
-    sql_pipe.add_component("sql_prompt", PromptBuilder(sql_prompt))
-    sql_pipe.add_component("sqlllm", OllamaGenerator(model="gemma3:12b"))
-    sql_pipe.add_component("sql_querier", sql_query)
+    # Define available APIs, [INSERT] if we use other ones
+    api_list = """[GetAccountIDbyName, GetAccountNamebyID]"""
 
-    sql_pipe.connect("sql_prompt", "sqlllm")
-    sql_pipe.connect("sqlllm.replies", "sql_querier.queries")
-    
-    try:
-        result = sql_pipe.run({
-        "sql_prompt": {"question": question, "columns": columns},})
-        result= result['sql_querier']['results']  
-        if "none" in str(result).lower():
-            result = ragpipe(question) #If sql retrieves no answer, go to rag (questions to similar)
-    except PipelineRuntimeError as e: #if runtimeerror because no cql result, go to rag (questions to similar)
-        print(f"Pipeline failed with error: {e}") 
-        result = ragpipe(question)
+    transaction_columns="""
+    Transaction_ID VARCHAR(40) not null primary key,
+    Time INT,
+    Client_ID VARCHAR(12) references Source,
+    Beneficiary_ID VARCHAR(16) references Beneficiary,
+    Amount Float,
+    Currency VARCHAR(3),
+    Transaction_Type VARCHAR(20) not null
+    Source_Table VARCHAR(20)
+    """
 
+    api_list="""GetAccountIDbyName,
+    GetAccountNamebyID
+    """
 
-if "api" in direction:
+    api_caller = RESTCall() 
+
     api_pipe= Pipeline()
     api_pipe.add_component("api_prompt", PromptBuilder(api_prompt))
     api_pipe.add_component("call_prompt", PromptBuilder(call_prompt))
@@ -278,31 +252,63 @@ if "api" in direction:
         "apipara":"""{"name": string}"""
   })
     result= result['api_caller']['results']
+    return result
+
+def ragpipe(query):
+    embedders_mapping = {
+            'gte-base': 'Alibaba-NLP/gte-base-en-v1.5',
+            'mutli-qa': 'sentence-transformers/multi-qa-mpnet-base-dot-v1',
+            'bge-base-inst': 'BAAI/bge-base-en-v1.5',
+            'alibaba-modern': 'Alibaba-NLP/gte-modernbert-base',
+            'nomic-modern': 'nomic-ai/modernbert-embed-base',
+            'modernbert-large': 'answerdotai/ModernBERT-large',
+            'multi-qa-cos': 'sentence-transformers/multi-qa-mpnet-base-cos-v1'
+    }
+    
+    # Parameters for rag 
+    top_k = 30
+    top_k_r = 5
+    embedder_name = embedders_mapping['gte-base']
+    llm = 'gemma3:12b'
+    # User question
+    query = question
+    # Run retriever
+    contexts = run_retriever(query, embedder_name, top_k, top_k_r)
+    result = run_generator(query, contexts, llm)
+    return result
+
+def nl_answer(question, result):
+    ##Answer in Natural Language
+    nllm = OllamaGenerator(model="gemma3:12b")
+    out_prompt= PromptBuilder(template="""Based on question: '{{question}}' provide the result:{{query_result}}. Build an answer in normal language containing both. Do not provide extra Information or explanations. Explain not, what any model does or did. Result:""")
+    answer_pipeline = Pipeline()
+    answer_pipeline.add_component("out_prompt", out_prompt)
+    answer_pipeline.add_component("nllm", nllm)
+    answer_pipeline.connect("out_prompt", "nllm")
+    input_data = {
+        "out_prompt": {
+            "query_result": result,
+            "question": question
+        }
+    }
+    outresult = answer_pipeline.run(input_data)
+    replies = outresult['nllm']['replies']
+    print(f"\n\n\nAnswer to the Question is: "+ replies[0] + "\n\n\n")
+
+question, direction = startpoint(input_text)
+
+
+###MAIN ACTION
+if "sql" in direction:
+    result = sqlpipe(question)
+
+if "api" in direction:
+    result = apipipe(question)
 
 if "rag" in direction:
     result = ragpipe(question)
     
+final_output = nl_answer(question, result)
+print(final_output)
 
 
-##Answer in Natural Language
-nllm = OllamaGenerator(model="gemma3:12b")
-out_prompt= PromptBuilder(template="""Based on question: '{{question}}' provide the result:{{query_result}}. Build an answer in normal language containing both. Do not provide extra Information or explanations. Explain not, what any model does or did. Result:""")
-answer_pipeline = Pipeline()
-answer_pipeline.add_component("out_prompt", out_prompt)
-answer_pipeline.add_component("nllm", nllm)
-answer_pipeline.connect("out_prompt", "nllm")
-input_data = {
-    "out_prompt": {
-        "query_result": result,
-        "question": question
-    }
-}
-outresult = answer_pipeline.run(input_data)
-replies = outresult['nllm']['replies']
-#sql_query_used = result["sql_querier"]["queries"][0]
-#print(f"Executed SQL query was: \n\n "+ sql_query_used)
-print(f"\n\n\nAnswer to the Question is: "+ replies[0] + "\n\n\n")
-
-#except PipelineRuntimeError as e:
-#   print(f"SQL Query is malformed. Try again.")
-#
