@@ -78,7 +78,7 @@ if __name__ == '__main__':
     embedder_name = embedders_mapping['gte-base']
 
     # Load chunks
-    chunks_path = '/home/omar/projects/FinAgent/data/pdf/chunks/pdf_chunks.pkl'
+    chunks_path = '/FinAgent/data/chunks/pdf_chunks.pkl'
     chunks = load_chunks(chunks_path)
 
     # Run indexing pipeline

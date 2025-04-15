@@ -38,7 +38,7 @@ def process_pdf(pdf_path, output_path, chunk_size=512, chunk_overlap=0):
     save_chunks(chunks, output_path)
 
 if __name__ == "__main__":
-    pdf_path = 'data/pdf/original_pdf/AMCOR_2023Q4_EARNINGS.pdf'
+    pdf_path = 'data/original_pdf/AMCOR_2023Q4_EARNINGS.pdf'
     output_path = 'data/pdf/chunks/pdf_chunks.pkl'
     chunk_size = 512
     chunk_overlap = 128

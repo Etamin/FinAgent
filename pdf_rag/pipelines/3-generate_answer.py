@@ -8,7 +8,7 @@ from haystack.components.rankers import TransformersSimilarityRanker
 from haystack_integrations.components.generators.ollama import OllamaGenerator
 from haystack.components.builders import PromptBuilder
 import requests
-
+from retrieval_pipeline import run_retriever, run_generator
 
 def format_execution_time(start_time, end_time):
     # Calculate the time difference

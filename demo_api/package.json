@@ -1,0 +1,13 @@
+{
+  "name": "bank-api-server",
+  "version": "1.0.0",
+  "description": "Demo bank API server using Express and SQLite",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "sqlite3": "^5.1.7"
+  }
+}
