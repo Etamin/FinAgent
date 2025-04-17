@@ -35,34 +35,34 @@ tracing.enable_tracing(LoggingTracer(tags_color_strings={"haystack.component.inp
 #    sys.exit(1)
 #input_text = sys.argv[1]
 
-input_text = "Wéi héich waren d'Nettoverkaafsnimm no GAAP am Joer 2022?" 
+input_text = "What is the account balance of account 12 am 30. September 2023?" 
 
-def translate_to_english(input_text):
-    ###TRANSLATION
-    ##translation templates
-    mttemplate_de = "Translate {{query}} to German. Just answer with the translated text. Dates should always follow the format YYYY-MM-DD." #without pivoting, comment out
-    mttemplate_en = "Translate {{query}} to English. Just answer with the translated text. Dates should always follow the format YYYY-MM-DD."
+###TRANSLATION
+##translation templates
+template_de = "Translate {{query}} to German. Just answer with the translated text." #without pivoting, comment out
+template_en = "Translate {{query}} to English. Just answer with the translated text."
 
-    mtpipe = Pipeline()
-    ##translation components
-    mtpipe.add_component("prompt_builder", PromptBuilder(template=mttemplate_de, required_variables=[]))#without pivoting, comment out
-    mtpipe.add_component("llm", OllamaGenerator(model="gemma3:12b"))#without pivoting, comment out
-    mtpipe.add_component("prompt_builder1", PromptBuilder(template=mttemplate_en, required_variables=[]))
-    mtpipe.add_component("llm1", OllamaGenerator(model="gemma3:12b"))
+pipe = Pipeline()
 
-    mtpipe.connect("prompt_builder", "llm")#without pivoting, comment out
-    mtpipe.connect("prompt_builder1", "llm1")
+##translation components
+pipe.add_component("prompt_builder", PromptBuilder(template=template_de, required_variables=[]))#without pivoting, comment out
+pipe.add_component("llm", OllamaGenerator(model="gemma3:12b"))#without pivoting, comment out
+pipe.connect("prompt_builder", "llm")#without pivoting, comment out
 
-    ##translation output
-    #first check language. Run if it is not English. Otherwise use English output like it is. 
-    if detect(input_text) == 'en':
-        question = input_text
-    else:
-        output = mtpipe.run({"prompt_builder":{"query": input_text}})#without pivoting, comment out
-        output1 = output["llm"]["replies"][0]#without pivoting, comment out
-        output2= mtpipe.run({"prompt_builder1":{"query": output1}})#without pivoting, change output1 to input_text
-        question = output2["llm1"]["replies"][0]  
-        return question
+pipe.add_component("prompt_builder1", PromptBuilder(template=template_en, required_variables=[]))
+pipe.add_component("llm1", OllamaGenerator(model="gemma3:12b"))
+pipe.connect("prompt_builder1", "llm1")
+
+##translation output
+#first check language. Run if it is not English. Otherwise use English output like it is. 
+if detect(input_text) == 'en':
+    question = input_text
+else:
+    output = pipe.run({"prompt_builder":{"query": input_text}})#without pivoting, comment out
+    output1 = output["llm"]["replies"][0]#without pivoting, comment out
+    question = pipe.run({"prompt_builder1":{"query": output1}})#without pivoting, change output1 to input_text
+    question = question["llm1"]["replies"][0]
+
 
 def classify_direction(question):
     ###Decide which interface to use and output the direction
@@ -73,8 +73,8 @@ def classify_direction(question):
     routprompt = """
     Create a classification result from the question: {{question}}.
 
-    Only if the question is about account balance (with account name), transactions (like transfer, money movements), payment, answer "sql".
-    Only if the question is about an account name or profiles, answer "api". Number can also refer to ID.
+    Only if the question is about account balance (with account name), transactions (like transfer, money movements), payment, answer "sql".  Number can also refer to ID.
+    Only if the question is about stock market, answer "api".
     Only if the question is about something else, answer "rag".
 
     Only use information that is present in the passage. 
@@ -302,7 +302,7 @@ def nl_answer(question, result):
     replies = outresult['nllm']['replies']
     print(f"\n\n\nAnswer to the Question is: "+ replies[0] + "\n\n\n")
 
-question = translate_to_english(input_text)
+#question = translate_to_english(input_text)
 direction = classify_direction(question)
 
 
