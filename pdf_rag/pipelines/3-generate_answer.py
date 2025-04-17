@@ -8,7 +8,7 @@ from haystack.components.rankers import TransformersSimilarityRanker
 from haystack_integrations.components.generators.ollama import OllamaGenerator
 from haystack.components.builders import PromptBuilder
 import requests
-from retrieval_pipeline import run_retriever, run_generator
+# from retrieval_pipeline import run_retriever, run_generator
 
 def format_execution_time(start_time, end_time):
     # Calculate the time difference
@@ -106,7 +106,7 @@ def run_retriever(query, embedder_name, top_k, top_k_r):
 
     return reranked_context
 
-def run_generator(query, contexts, llm):
+# def run_generator(query, contexts, llm):
     template = """
     CONTEXT:
     {% for document in documents %}
@@ -174,5 +174,5 @@ if __name__ == '__main__':
     query = 'What is the capital of Morocco?'
     # Run retriever
     contexts = run_retriever(query, embedder_name, top_k, top_k_r)
-    answer = run_generator(query, contexts, llm)
-    print(f"Answer: {answer}")
+    # answer = run_generator(query, contexts, llm)
+    # print(f"Answer: {answer}")

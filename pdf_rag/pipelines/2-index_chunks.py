@@ -12,7 +12,7 @@ def load_chunks(chunks_path):
     with open(chunks_path, 'rb') as f:
         chunks = pickle.load(f)
     
-    documents = [Document(content=chunk.text) for chunk in chunks]
+    documents = [Document(content=chunk.page_content, meta=chunk.metadata) for chunk in chunks]
     print(f'{len(documents)} documents have been loaded!')
     return documents
 
@@ -78,7 +78,7 @@ if __name__ == '__main__':
     embedder_name = embedders_mapping['gte-base']
 
     # Load chunks
-    chunks_path = '/FinAgent/data/chunks/pdf_chunks.pkl'
+    chunks_path = 'pdf_rag/data/chunks/AMCOR_2023Q4_EARNINGS.pdf.pkl'
     chunks = load_chunks(chunks_path)
 
     # Run indexing pipeline
