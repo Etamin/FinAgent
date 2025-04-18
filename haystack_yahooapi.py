@@ -212,8 +212,8 @@ def ragpipe(query):
     # User question
     query = question
     # Run retriever
-    contexts = run_retriever(query, embedder_name, top_k, top_k_r)
-    result = run_generator(query, contexts, llm)
+    result = run_retriever(query, embedder_name, top_k, top_k_r)
+    #result = run_generator(query, contexts, llm)
     return result
 
 def nl_answer(question, result):
