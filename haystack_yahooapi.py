@@ -35,7 +35,7 @@ tracing.enable_tracing(LoggingTracer(tags_color_strings={"haystack.component.inp
 #    sys.exit(1)
 #input_text = sys.argv[1]
 
-input_text = "What is the account balance of account 12 am 30. September 2023?" 
+input_text = "Wéi héich waren d'Nettoverkaafszuelen no GAAP am Joer 2022?" 
 
 ###TRANSLATION
 ##translation templates
@@ -138,128 +138,60 @@ def sqlpipe(question):
     except PipelineRuntimeError as e: #if runtimeerror because no cql result, go to rag (questions to similar)
         print(f"SQL Pipeline failed with error: {e}") 
         result = ragpipe(question)
-    return result
+    return result 
+
+
+import yfinance as yf
+import ast 
 
 ###API
-@component
-class RESTCall:
-        
-    @component.output_types(results=str, queries=List[str])
-    def run(self, queries:List[str]):
-        print(queries[0])
-        #queries = ["""
-        #{
-        #    "api_name": "GetAccount",
-        #    "parameters": {
-        #        "name": "alice dupont"
-        #    }
-        #}
-        #"""]
-        #print(queries[0])
-
-        queries[0]=queries[0].replace("json","").replace("```","")
-        call=json.loads(queries[0])
-
-
-        #mapping from api_name to actual endpoint
-        api_name_to_endpoint = {
-            #"GetAccount": "/customers/",
-            "GetAccountIDbyName": "/customers/id?name=",
-            "GetAccountNamebyID": "/customers/name?id="
-        #[INSERT] if there are more
-        }
-
-        #Map the API name to the actual API path
-        api_path = api_name_to_endpoint.get(call["api_name"])
-        if not api_path:
-            raise ValueError(f"Unknown API name: {call['api_name']}")
-        
-        param_values = list(call["parameters"].values())
-        if not param_values:
-            raise ValueError("Missing parameter value")
-        param_value = param_values[0]
-
-        # Construct the final path
-        full_path = api_path + str(param_value)
-
-        # Send the GET request
-        response = requests.get("http://localhost:3001" + full_path)   
-        time.sleep(1)
-        #response = requests.get("http://localhost:3001" + api_path, params=call["parameters"])
-        return {"results": response.content.decode("utf-8"), "queries": queries[0]}
-
 def apipipe(question):
     #api prompt
-    api_prompt = """Please select an API function calling. The calling should answer the following Question: {{question}};
-    The query is to be related to a bank system and include these APIs with descriptions:
-    APIs: {{apis}};
-    ===============
-    Make sure your response is only a simple string of API name.
-    Answer:"""
+    api_prompt = """Please select a ticker symbol from this: {{tickers}}, based on the company name mentioned in the question: {{question}}. 
+    If a concrete time period is mentioned, convert it like this: e.g. 2 months to "2mo" or one year to "1y", otherwise insert "1d".
 
-    # Prompt template for generating API requests
-    call_prompt = """Please generate an API call. The call should answer the following Question: {{question}};
-    Use this:
-    Api_name: {{api_name}}
-    Parameters: {{apipara}};
+    Create a list of strings from it:
+    ["ticker symbol", "period"]
 
-    Use the following format:
-    {{api_format}}
+    Make sure your response stricktly follows the format.
+    Do not include anything else in your Answer."""
 
-    Make sure your response is a JSON object string without any format like json. Parameters should just contain the parameter value. 
-    Answer:"""
 
-    # Define API format template
-    api_format = """
-    {
-       "api":"apiName",
-       "parameters":{
-          "parameter1":"value1",
-          "parameter2":"value2"
-       }
-    }
-    """
+    tickers = "BNP.PA, GOOG, AAPL, MT"
 
-    # Define available APIs, [INSERT] if we use other ones
-    api_list = """[GetAccountIDbyName, GetAccountNamebyID]"""
-
-    transaction_columns="""
-    Transaction_ID VARCHAR(40) not null primary key,
-    Time INT,
-    Client_ID VARCHAR(12) references Source,
-    Beneficiary_ID VARCHAR(16) references Beneficiary,
-    Amount Float,
-    Currency VARCHAR(3),
-    Transaction_Type VARCHAR(20) not null
-    Source_Table VARCHAR(20)
-    """
-
-    api_list="""GetAccountIDbyName,
-    GetAccountNamebyID
-    """
-
-    api_caller = RESTCall() 
-
-    api_pipe= Pipeline()
+    # Build and run pipeline
+    api_pipe = Pipeline()
     api_pipe.add_component("api_prompt", PromptBuilder(api_prompt))
-    api_pipe.add_component("call_prompt", PromptBuilder(call_prompt))
     api_pipe.add_component("apillm", OllamaGenerator(model="gemma3:12b"))
-    api_pipe.add_component("callllm", OllamaGenerator(model="gemma3:12b"))
-    api_pipe.add_component("api_caller", api_caller)
-
     api_pipe.connect("api_prompt", "apillm")
-    api_pipe.connect("apillm.replies", "call_prompt.api_name")
-    api_pipe.connect("call_prompt", "callllm")
-    api_pipe.connect("callllm.replies", "api_caller.queries")
 
-    result = api_pipe.run({"question": question,
-        "apiformat":api_format,
-        "columns":transaction_columns,
-        "apis":api_list,
-        "apipara":"""{"name": string}"""
-  })
-    result= result['api_caller']['results']
-    return result
+    result = api_pipe.run({
+        "question": question,
+        "tickers": tickers,
+    })
+
+    llm_reply = result["apillm"]["replies"][0]
+
+    try:
+        # Use ast.literal_eval to safely parse the list
+        api_prompt_result = ast.literal_eval(llm_reply)
+        ticker_symbol, period = api_prompt_result[0], api_prompt_result[1]
+
+        # Get stock data using yfinance
+        ticker = yf.Ticker(ticker_symbol)
+        time.sleep(1)
+        data = ticker.history(period=period)
+        time.sleep(1)
+        close_value = data.loc[data.index[0], "Close"]
+        latest_date = data.index[-1]
+        print("Date:", latest_date)
+        latest_date_str = latest_date.date().isoformat()
+        result = f"Current value: {close_value} on date: {latest_date_str}"
+        return result
+
+    except Exception as e:
+        print("Error in API pipeline", e)
+
 
 def ragpipe(query):
     embedders_mapping = {
@@ -303,8 +235,8 @@ def nl_answer(question, result):
     print(f"\n\n\nAnswer to the Question is: "+ replies[0] + "\n\n\n")
 
 #question = translate_to_english(input_text)
-direction = classify_direction(question)
-
+question, direction = classify_direction(question)
+direction = direction.strip().lower()
 
 ###MAIN ACTION
 if "sql" in direction:
