@@ -23,11 +23,13 @@ from haystack.core.errors import PipelineRuntimeError
 import time
 from pdf_rag.pipelines.generate_answer import run_retriever
 #from pdf_rag.pipelines.generate_answer import run_generator
+import yfinance as yf
+import ast 
 
-logging.basicConfig(format="%(levelname)s - %(name)s -  %(message)s", level=logging.WARNING)
-logging.getLogger("haystack").setLevel(logging.DEBUG)
-tracing.tracer.is_content_tracing_enabled = True 
-tracing.enable_tracing(LoggingTracer(tags_color_strings={"haystack.component.input": "\x1b[1;31m", "haystack.component.name": "\x1b[1;34m"}))
+#logging.basicConfig(format="%(levelname)s - %(name)s -  %(message)s", level=logging.WARNING)
+#logging.getLogger("haystack").setLevel(logging.DEBUG)
+#tracing.tracer.is_content_tracing_enabled = True 
+#tracing.enable_tracing(LoggingTracer(tags_color_strings={"haystack.component.input": "\x1b[1;31m", "haystack.component.name": "\x1b[1;34m"}))
 
 #read input question from bash
 #if len(sys.argv) < 2:
@@ -141,8 +143,10 @@ def sqlpipe(question):
     return result 
 
 
-import yfinance as yf
-import ast 
+_original_get = requests.get
+def logged_get(*args, **kwargs):
+    print("GET:", args[0])
+    return _original_get(*args, **kwargs)
 
 ###API
 def apipipe(question):
