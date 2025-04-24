@@ -106,7 +106,7 @@ def run_retriever(query, embedder_name, top_k, top_k_r):
 
     return reranked_context
 
-# def run_generator(query, contexts, llm):
+def run_generator(query, contexts, llm):
     template = """
     CONTEXT:
     {% for document in documents %}
@@ -166,13 +166,20 @@ if __name__ == '__main__':
     
     # Parameters
     top_k = 30
-    top_k_r = 5
+    top_k_r = 3
     embedder_name = embedders_mapping['gte-base']
     llm = 'gemma3:4b'
 
     # User question
-    query = 'What is the capital of Morocco?'
+    query = 'how many votes against Steven Oakland from FOOTLOCKER?'
     # Run retriever
     contexts = run_retriever(query, embedder_name, top_k, top_k_r)
-    # answer = run_generator(query, contexts, llm)
-    # print(f"Answer: {answer}")
+    answer = run_generator(query, contexts, llm)
+    print(f"Answer: {answer}")
+
+    for context in contexts:
+        print(f"Context: {context.content}")
+        print(f"Score: {context.score}")
+        print(f"Meta: {context.meta}")
+        print("-" * 50)
+    print("End of contexts")

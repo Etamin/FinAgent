@@ -1,3 +1,4 @@
+import os
 import pickle
 from haystack.utils import ComponentDevice
 from haystack.components.embedders import SentenceTransformersDocumentEmbedder, SentenceTransformersTextEmbedder
@@ -9,11 +10,11 @@ from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
 
 
 def load_chunks(chunks_path):
-    with open(chunks_path, 'rb') as f:
+    with open(chunks_path, "rb") as f:
         chunks = pickle.load(f)
-    
+
     documents = [Document(content=chunk.page_content, meta=chunk.metadata) for chunk in chunks]
-    print(f'{len(documents)} documents have been loaded!')
+    print(f"{len(documents)} documents loaded from {os.path.basename(chunks_path)}")
     return documents
 
 def get_embedders(embedder_name):
@@ -29,38 +30,17 @@ def get_embedders(embedder_name):
 
     return docs_embedder, q_embedder
 
-def index_docs(documents, embedder_name):
-    path = 'qdrant'
-    document_store = QdrantDocumentStore(
-        # ":memory:",
-        path=path,
-        # url='localhost:6333',
-        index="dense",
-        recreate_index=False,
-        hnsw_config={"m": 16, "ef_construct": 100},  # Optional
-        # Please choose one of the options: cosine, dot_product, l2
-        similarity='cosine',
-        on_disk=True
-    )
-    
-    # Components
+def build_indexing_pipeline(document_store, embedder_name):
+    """Create the embedder->writer pipeline once and reuse it for every batch."""
     docs_embedder, _ = get_embedders(embedder_name)
-    print(f'docs embedder: {docs_embedder.model}')
     docs_writer = DocumentWriter(document_store=document_store, policy=DuplicatePolicy.SKIP)
 
-    # Pipeline
-    indexing_pipeline = Pipeline()
+    pipeline = Pipeline()
+    pipeline.add_component(instance=docs_embedder, name="embedder")
+    pipeline.add_component(instance=docs_writer, name="writer")
+    pipeline.connect("embedder.documents", "writer.documents")
 
-    indexing_pipeline.add_component(instance=docs_embedder, name="embedder")
-    indexing_pipeline.add_component(instance=docs_writer, name="writer")
-    indexing_pipeline.connect("embedder.documents", "writer.documents")
-    # print(indexing_pipeline)
-
-    indexing_pipeline.run({"documents": documents})
-
-    print(document_store.count_documents())
-
-    return document_store
+    return pipeline
 
 
 if __name__ == '__main__':
@@ -74,12 +54,28 @@ if __name__ == '__main__':
             'multi-qa-cos': 'sentence-transformers/multi-qa-mpnet-base-cos-v1'
     }
 
-    # Parameters
-    embedder_name = embedders_mapping['gte-base']
+    # 1- Choose embedder
+    embedder_name = embedders_mapping["gte-base"]
 
-    # Load chunks
-    chunks_path = 'pdf_rag/data/chunks/AMCOR_2023Q4_EARNINGS.pdf.pkl'
-    chunks = load_chunks(chunks_path)
+    # 2- Create / reopen the (single) Qdrant store
+    document_store = QdrantDocumentStore(
+        path="qdrant",
+        index="dense",
+        recreate_index=False,  # set True if you need a clean slate
+        hnsw_config={"m": 16, "ef_construct": 100},
+        similarity="cosine",
+        on_disk=True,
+    )
 
-    # Run indexing pipeline
-    document_store = index_docs(chunks, embedder_name)
+    # 3️- Build the pipeline ONCE
+    indexing_pipeline = build_indexing_pipeline(document_store, embedder_name)
+
+    # 4- Index every .pkl in the chunks folder
+    chunks_folder = "pdf_rag/data/chunks"
+    for filename in os.listdir(chunks_folder):
+        if filename.endswith(".pkl"):
+            chunks_path = os.path.join(chunks_folder, filename)
+            documents = load_chunks(chunks_path)
+            indexing_pipeline.run({"documents": documents})
+
+    print(f"Finished. Vector store now holds {document_store.count_documents()} documents.")

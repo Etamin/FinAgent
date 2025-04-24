@@ -62,10 +62,14 @@ def process_pdf(pdf_path, chunk_size=512, chunk_overlap=0):
     print(f"Saving {len(chunks)} chunks to: {output_path}")
     save_chunks(chunks, output_path)
 
-if __name__ == "__main__":
-    pdf_path = 'pdf_rag/data/original_pdf/AMCOR_2023Q4_EARNINGS.pdf'
-    
+if __name__ == "__main__":    
     chunk_size = 512
     chunk_overlap = 128
 
-    process_pdf(pdf_path, chunk_size, chunk_overlap)
+    folder_path = 'pdf_rag/data/original_pdf'
+    for filename in os.listdir(folder_path):
+        if filename.endswith('.pdf'):
+            pdf_path = os.path.join(folder_path, filename)
+            process_pdf(pdf_path, chunk_size, chunk_overlap)
+            print('' + '-' * 50 + '\n')
+    print("All PDFs processed.")
