@@ -26,6 +26,7 @@ from pdf_rag.pipelines.generate_answer import run_retriever
 import yfinance as yf
 import ast 
 
+
 #logging.basicConfig(format="%(levelname)s - %(name)s -  %(message)s", level=logging.WARNING)
 #logging.getLogger("haystack").setLevel(logging.DEBUG)
 #tracing.tracer.is_content_tracing_enabled = True 
@@ -37,7 +38,7 @@ import ast
 #    sys.exit(1)
 #input_text = sys.argv[1]
 
-input_text = "Wéi héich waren d'Nettoverkaafszuelen no GAAP am Joer 2022?" 
+input_text = "What was the stock price for BGL BNP PAribas one month ago?" 
 
 ###TRANSLATION
 ##translation templates
@@ -124,7 +125,7 @@ def sqlpipe(question):
     sql_query = SQLQuery('bank_demo.db')
 
     sql_pipe= Pipeline()
-    sql_pipe.add_component("sql_prompt", PromptBuilder(sql_prompt))
+    sql_pipe.add_component("sql_prompt", PromptBuilder(sql_prompt, required_variables=[]))
     sql_pipe.add_component("sqlllm", OllamaGenerator(model="gemma3:12b"))
     sql_pipe.add_component("sql_querier", sql_query)
 
@@ -165,7 +166,7 @@ def apipipe(question):
 
     # Build and run pipeline
     api_pipe = Pipeline()
-    api_pipe.add_component("api_prompt", PromptBuilder(api_prompt))
+    api_pipe.add_component("api_prompt", PromptBuilder(api_prompt, required_variables=["tickers", "question"]))
     api_pipe.add_component("apillm", OllamaGenerator(model="gemma3:12b"))
     api_pipe.connect("api_prompt", "apillm")
 
@@ -181,14 +182,19 @@ def apipipe(question):
         api_prompt_result = ast.literal_eval(llm_reply)
         ticker_symbol, period = api_prompt_result[0], api_prompt_result[1]
 
+        print(f"[INFO] API Call: yf.Ticker('{ticker_symbol}').history(period='{period}')")
+
         # Get stock data using yfinance
         ticker = yf.Ticker(ticker_symbol)
         time.sleep(1)
         data = ticker.history(period=period)
         time.sleep(1)
+
+        print(f"[GET REQUEST] https://query1.finance.yahoo.com/v8/finance/chart/{ticker_symbol}?range={period}&interval=1d")
+
+
         close_value = data.loc[data.index[0], "Close"]
         latest_date = data.index[-1]
-        print("Date:", latest_date)
         latest_date_str = latest_date.date().isoformat()
         result = f"Current value: {close_value} on date: {latest_date_str}"
         return result
@@ -223,7 +229,7 @@ def ragpipe(query):
 def nl_answer(question, result):
     ##Answer in Natural Language
     nllm = OllamaGenerator(model="gemma3:12b")
-    out_prompt= PromptBuilder(template="""Based on question: '{{question}}' provide the result:{{query_result}}. Build an answer in normal language containing both. Do not provide extra Information or explanations. Explain not, what any model does or did. Result:""")
+    out_prompt= PromptBuilder(template="""Based on question: '{{question}}' provide the result:{{query_result}}. Build an answer in normal language containing both. Do not provide extra Information or explanations. Explain not, what any model does or did. Result:""", required_variables=[])
     answer_pipeline = Pipeline()
     answer_pipeline.add_component("out_prompt", out_prompt)
     answer_pipeline.add_component("nllm", nllm)
