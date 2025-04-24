@@ -4,3 +4,8 @@ RAG:
 API:
 "What was the stock price for BGL BNP PAribas one month ago?" 
 "Was ist der aktuelle Aktienkurs für AccelorMittal?" 
+
+SQL:
+"Wieviel Geld wurde am 18.2.2025 vom Konto Nummer 3 überwiesen?"
+"What is the description of transaction no. 14?"
+"How often was debit used on account 10?"

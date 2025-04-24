@@ -38,7 +38,7 @@ import ast
 #    sys.exit(1)
 #input_text = sys.argv[1]
 
-input_text = "What was the stock price for BGL BNP PAribas one month ago?" 
+input_text = "Wieviel Geld wurde am 18.2.2025 vom Konto Nummer 3 überwiesen?"  
 
 ###TRANSLATION
 ##translation templates
@@ -106,6 +106,7 @@ class SQLQuery:
         for query in queries:
           query=query.replace("```sql","").replace("```","")
           query=query.replace("sql","").replace("","")
+          print(query)
           result = pd.read_sql(query, self.connection)
           results.append(f"{result}")
         self.connection.close() 
@@ -119,7 +120,7 @@ def sqlpipe(question):
     # Modify table name if needed [INSERT]
     sql_prompt = """Please generate an SQL query. The query should answer the following Question: {{question}};
                 The query is to be answered for the table is called 'transactions' with the following
-                Columns: {{columns}};
+                Columns: {{columns}};"
                 Answer:"""
         
     sql_query = SQLQuery('bank_demo.db')
