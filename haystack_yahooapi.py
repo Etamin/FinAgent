@@ -280,12 +280,23 @@ theme = gr.themes.Soft().set(
     block_title_text_color='#636f85'
 )
 
+# Markdown content for description
+markdown_description = """
+### Welcome to our Partnershipday Demo!\n
+You can do a lot of great stuff with it!\n
+*Blablsbla \n
+This is placed above.
+"""
 
-gr.Interface(
+interface = gr.Interface(
     fn=main,
-    inputs=gr.Textbox(label="Your Question"),
+    inputs=[gr.Textbox(label="Your Question"),gr.Markdown("\n\n### Additional Info\nThis appears below")], #Also a way to include text
     outputs=gr.Textbox(label="Result"),
     title="Partnershipday Demo",
+    description=markdown_description, 
     theme="base",
     flagging_mode="never",
-).launch(share=True)
+)
+
+
+interface.launch(share=True)
