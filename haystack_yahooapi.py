@@ -136,24 +136,21 @@ def main(input_text):
             "sql_prompt": {"question": question, "columns": columns},})
             result= fullresult['sql_querier']['results']  
             if "none" in str(result).lower():
-                result = ragpipe(question) #If sql retrieves no answer, go to rag (questions to similar)
-                fullresult = "RAG"
+                result = "No Answer"
+                #result = ragpipe(question) #If sql retrieves no answer, go to rag (questions to similar)
+                #fullresult = "RAG"
         except PipelineRuntimeError as e: #if runtimeerror because no cql result, go to rag (questions to similar)
             print(f"SQL Pipeline failed with error: {e}") 
-            result = ragpipe(question)
-            fullresult = "RAG"
+            result = "No Answer"
+            #result = ragpipe(question)
+            #fullresult = "RAG"
         return result, fullresult 
 
-
-    _original_get = requests.get
-    def logged_get(*args, **kwargs):
-        print("GET:", args[0])
-        return _original_get(*args, **kwargs)
 
     ###API
     def apipipe(question):
         #api prompt
-        api_prompt = """Please select a ticker symbol from this: {{tickers}}, based on the company name mentioned in the question: {{question}}. 
+        api_prompt = """If the company name mentioned in the question: "{{question}}" is explicitly APPLE, GOOGLE, BNP BGL PARIBAS or ACCELOR MITTAL, select a ticker symbol from this: {{tickers}}. If none of Apple, Google, BNP BGL Paribas or Accelor Mittal is explicitely mentioned, choose "None" as ticker symbol.
         If a concrete time period is mentioned, convert it like this: e.g. 2 months to "2mo" or one year to "1y", otherwise insert "1d".
 
         Create a list of strings from it:
@@ -163,7 +160,7 @@ def main(input_text):
         Do not include anything else in your Answer."""
 
 
-        tickers = "BNP.PA, GOOG, AAPL, MT"
+        tickers = "BNP.PA, GOOG, AAPL, MT, None"
 
         api_pipe = Pipeline()
         api_pipe.add_component("api_prompt", PromptBuilder(api_prompt, required_variables=["tickers", "question"]))
@@ -194,13 +191,16 @@ def main(input_text):
 
 
             close_value = data.loc[data.index[0], "Close"]
-            latest_date = data.index[-1]
+            latest_date = data.index[0]
             latest_date_str = latest_date.date().isoformat()
             result = f"Current value: {close_value} on date: {latest_date_str}"
             return result, fullapiresult
 
         except Exception as e:
-            print("Error in API pipeline", e)
+            result = "No Answer"
+            fullapiresult = "Broken Api Call"
+            return result, fullapiresult
+            #print("Error in API pipeline", e)
 
 
     def ragpipe(query):
@@ -223,13 +223,14 @@ def main(input_text):
         query = question
         # Run retriever
         result = run_retriever(query, embedder_name, top_k, top_k_r)
+        full_result = "No Metadata yet"
         #result = run_generator(query, contexts, llm)
-        return result
+        return result, full_result
 
     def nl_answer(question, result, lang):
         ##Answer in Natural Language
         nllm = OllamaGenerator(model="gemma3:12b")
-        out_prompt= PromptBuilder(template="""Based on question: '{{question}}' provide the result:{{query_result}}. Build an answer in normal language containing both. Do not provide extra Information (like language used) or explanations, just the plain Answer. Explain not, what any model does or did. Provide in English and a second time in language: {{lang}}.""", required_variables=[])
+        out_prompt= PromptBuilder(template="""Based on question: '{{question}}' provide the result:{{query_result}}. Build an answer in normal language containing both. Do not provide extra Information (like language used) or explanations, just the plain Answer. Explain not, what any model does or did. Provide in English and a second time in language: {{lang}}. If there is 'None', 'No Answer' or an empty string in the result, just answer 'No Answer.'""", required_variables=[])
         answer_pipeline = Pipeline()
         answer_pipeline.add_component("out_prompt", out_prompt)
         answer_pipeline.add_component("nllm", nllm)
@@ -255,13 +256,13 @@ def main(input_text):
     ###TO DO: remove RAG fallback
     if "sql" in direction:
         result, fullresult = sqlpipe(question)
-        if fullresult == "RAG":
-            metadat = "- NOT IMPLEMENTED YET -"
-        else:
-            metadat = fullresult['sql_querier']['queries']
-            metadat=metadat[0]
-            metadat=metadat.replace("```sql","").replace("```","")
-            metadat=metadat.replace("sql","").replace("","")
+        #if fullresult == "RAG":
+        #    metadat = "- NOT IMPLEMENTED YET -"
+        #else:
+        metadat = fullresult['sql_querier']['queries']
+        metadat=metadat[0]
+        metadat=metadat.replace("```sql","").replace("```","")
+        metadat=metadat.replace("sql","").replace("","")
 
     elif "api" in direction:
         result, metadat = apipipe(question)
