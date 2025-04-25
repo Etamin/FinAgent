@@ -2,7 +2,7 @@ RAG:
 "Wéi héich waren d'Nettoverkaafszuelen no GAAP am Joer 2022?" 
 
 API:
-"What was the stock price for BGL BNP PAribas one month ago?" 
+"What was the stock price for BGL BNP Paribas one month ago?" 
 "Was ist der aktuelle Aktienkurs für AccelorMittal?" 
 
 SQL:
