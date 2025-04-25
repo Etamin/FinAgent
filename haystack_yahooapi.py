@@ -273,11 +273,18 @@ def main(input_text):
     final_output = nl_answer(question, result, lang)
     final_output1 = final_output + "Answer query/source is:" + f"\n" + metadat + f"\n"
     return final_output1
-    
+
+theme = gr.themes.Soft().set(
+    block_label_background_fill="*primary_50",
+    block_title_text_color='#636f85'
+)
+
 
 gr.Interface(
     fn=main,
     inputs=gr.Textbox(label="Your Question"),
     outputs=gr.Textbox(label="Result"),
     title="Partnershipday Demo",
+    theme="base",
+    flagging_mode="never",
 ).launch(share=True)
