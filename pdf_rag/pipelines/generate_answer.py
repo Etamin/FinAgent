@@ -1,3 +1,4 @@
+import re
 import time
 from haystack.utils import ComponentDevice
 from haystack.components.embedders import SentenceTransformersDocumentEmbedder, SentenceTransformersTextEmbedder
@@ -107,17 +108,10 @@ def run_retriever(query, embedder_name, top_k, top_k_r):
     return reranked_context
 
 def run_generator(query, contexts, llm):
-    template = """
-    CONTEXT:
-    {% for document in documents %}
-        {{ loop.index }}. {{ document.content }}
-    {% endfor %}
-
-    QUESTION: {{ query }}?
-    
-    INSTRUCTIONS: Answer the QUESTION using only the information provided in the CONTEXT above. Do not rely on any prior knowledge. If the CONTEXT does not contain sufficient information to answer the QUESTION, respond with 'No answer'.
-
-    """
+    # Read the prompt template
+    template_path = "pdf_rag/pipelines/prompt.txt"  # Assuming the file is in the same directory
+    with open(template_path, "r") as f:
+        template = f.read()
 
     system_prompt = 'You are a financial expert specializing in corporate financial reports and filings.'
 
@@ -168,18 +162,50 @@ if __name__ == '__main__':
     top_k = 30
     top_k_r = 3
     embedder_name = embedders_mapping['gte-base']
-    llm = 'gemma3:4b'
+    llm = 'gemma3:12b'
 
     # User question
-    query = 'how many votes against Steven Oakland from FOOTLOCKER?'
+    query = 'What is the net sales of AMCOR in 2023?'
     # Run retriever
     contexts = run_retriever(query, embedder_name, top_k, top_k_r)
+
+    # Extract and annotate page ranges for each context chunk
+    for ctx in contexts:
+        # Access provenance metadata
+        chunk_meta = ctx.meta.get('dl_meta', {}).get('meta', {})
+        pages = [prov['page_no']
+                 for item in chunk_meta.get('doc_items', [])
+                 for prov in item.get('prov', [])]
+        if pages:
+            lo, hi = min(pages), max(pages)
+            page_range = str(lo) if lo == hi else f"{lo}–{hi}"
+        else:
+            page_range = 'N/A'
+        # Store the computed page_range back into metadata
+        chunk_meta['page_range'] = page_range
+        ctx.meta['dl_meta']['meta'] = chunk_meta
+
     answer = run_generator(query, contexts, llm)
     print(f"Answer: {answer}")
 
-    for context in contexts:
-        print(f"Context: {context.content}")
-        print(f"Score: {context.score}")
-        print(f"Meta: {context.meta}")
-        print("-" * 50)
-    print("End of contexts")
+    # Parse the LLM output to extract the used chunk index
+    match = re.search(r'Used chunk(?:s)?:\s*(\d+)', answer)
+    if match:
+        idx = int(match.group(1))
+        selected_chunk = contexts[idx - 1]
+        print(f"Selected chunk index: {idx}")
+        print(f"Selected chunk page number range: {selected_chunk.meta['dl_meta']['meta']['page_range']}")
+        print(f"Selected chunk filename: {selected_chunk.meta['dl_meta']['meta']['origin']['filename']}")
+        # print(f"Selected chunk metadata: {selected_chunk.meta}\n")
+    else:
+        selected_chunk = None
+        print("No selected chunk found.\n")
+
+    # Print contexts with page ranges and scores
+    # for idx, ctx in enumerate(contexts, start=1):
+    #     chunk_meta = ctx.meta['dl_meta']['meta']
+    #     print(f"Context {idx} (pages {chunk_meta.get('page_range')}):")
+    #     print(ctx.content)
+    #     print(f"Score: {ctx.score}\n{'-'*50}")
+
+    # print("End of contexts")

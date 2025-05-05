@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import pickle
 from haystack.utils import ComponentDevice
 from haystack.components.embedders import SentenceTransformersDocumentEmbedder, SentenceTransformersTextEmbedder
@@ -7,15 +8,10 @@ from haystack import Pipeline
 from haystack.components.writers import DocumentWriter
 from haystack.document_stores.types import DuplicatePolicy
 from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
+from docling_haystack.converter import DoclingConverter, ExportType
+from docling.chunking import HybridChunker
 
 
-def load_chunks(chunks_path):
-    with open(chunks_path, "rb") as f:
-        chunks = pickle.load(f)
-
-    documents = [Document(content=chunk.page_content, meta=chunk.metadata) for chunk in chunks]
-    print(f"{len(documents)} documents loaded from {os.path.basename(chunks_path)}")
-    return documents
 
 def get_embedders(embedder_name):
     device = ComponentDevice.from_str("cuda:0")
@@ -31,13 +27,23 @@ def get_embedders(embedder_name):
     return docs_embedder, q_embedder
 
 def build_indexing_pipeline(document_store, embedder_name):
-    """Create the embedder->writer pipeline once and reuse it for every batch."""
+    """Create the pipeline for indexing documents into the Qdrant store."""
+    chunker = HybridChunker(tokenizer=embedder_name)
+    export_type = ExportType.DOC_CHUNKS     # To convert PDF to chunks in loading time
+    converter = DoclingConverter(export_type=export_type,
+                                 chunker=chunker)
+    
     docs_embedder, _ = get_embedders(embedder_name)
     docs_writer = DocumentWriter(document_store=document_store, policy=DuplicatePolicy.SKIP)
 
+    # Add components to the pipeline
     pipeline = Pipeline()
+    pipeline.add_component(instance=converter, name="converter")
     pipeline.add_component(instance=docs_embedder, name="embedder")
     pipeline.add_component(instance=docs_writer, name="writer")
+    
+    # Connect the components
+    pipeline.connect("converter", "embedder")
     pipeline.connect("embedder.documents", "writer.documents")
 
     return pipeline
@@ -51,7 +57,8 @@ if __name__ == '__main__':
             'alibaba-modern': 'Alibaba-NLP/gte-modernbert-base',
             'nomic-modern': 'nomic-ai/modernbert-embed-base',
             'modernbert-large': 'answerdotai/ModernBERT-large',
-            'multi-qa-cos': 'sentence-transformers/multi-qa-mpnet-base-cos-v1'
+            'multi-qa-cos': 'sentence-transformers/multi-qa-mpnet-base-cos-v1',
+            'all-minilm': 'sentence-transformers/all-MiniLM-L6-v2'
     }
 
     # 1- Choose embedder
@@ -61,21 +68,19 @@ if __name__ == '__main__':
     document_store = QdrantDocumentStore(
         path="qdrant",
         index="dense",
-        recreate_index=False,  # set True if you need a clean slate
+        recreate_index=True,  # set True if you need a clean slate
         hnsw_config={"m": 16, "ef_construct": 100},
         similarity="cosine",
         on_disk=True,
     )
 
-    # 3️- Build the pipeline ONCE
+    # 3- Create the pipeline
     indexing_pipeline = build_indexing_pipeline(document_store, embedder_name)
 
-    # 4- Index every .pkl in the chunks folder
-    chunks_folder = "pdf_rag/data/chunks"
-    for filename in os.listdir(chunks_folder):
-        if filename.endswith(".pkl"):
-            chunks_path = os.path.join(chunks_folder, filename)
-            documents = load_chunks(chunks_path)
-            indexing_pipeline.run({"documents": documents})
+    # 4- Run the pipeline
+    parent_folder = Path("pdf_rag/data/original_pdf")
+    pdf_paths = list(parent_folder.glob("*.pdf"))
+  
+    indexing_pipeline.run({"converter": {"paths": pdf_paths}})
 
     print(f"Finished. Vector store now holds {document_store.count_documents()} documents.")

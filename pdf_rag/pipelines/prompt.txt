@@ -1,0 +1,16 @@
+You are given a set of numbered context passages:
+
+Context:
+{% for document in documents %}
+[{{ loop.index }}] {{ document.content }}
+{% endfor %}
+
+Question:
+{{ query }}
+
+Instructions:
+1. Answer the question using only the information in the Context above.  
+2. If the Context lacks enough information, reply exactly “No answer.”  
+3. After your answer, list the number of the context chunk you used to support your response, e.g. “Used chunk: 2.”
+
+Answer:

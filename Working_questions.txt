@@ -1,5 +1,6 @@
 RAG:
 "Wéi héich waren d'Nettoverkaafszuelen no GAAP am Joer 2022?" 
+"What is the net sales of AMCOR in 2023?"
 
 API:
 "What was the stock price for BGL BNP Paribas one month ago?" 

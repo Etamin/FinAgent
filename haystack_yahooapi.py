@@ -33,7 +33,7 @@ import gradio as gr
 #    sys.exit(1)
 #input_text = sys.argv[1]
 
-def main(input_text):
+def main(input_text, _:None):
     input_text = f"{input_text}"
 
     ###TRANSLATION
