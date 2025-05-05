@@ -639,28 +639,28 @@ def main(input_text, _=None):
     print(f"The whole process finished. Total process time: {all_time}")
     return final_output1
 
-theme = gr.themes.Soft().set(
-    block_label_background_fill="*primary_50",
-    block_title_text_color='#636f85'
+
+theme = gr.themes.Base().set(
+    background_fill_primary='black',
+    block_background_fill='black',
+    block_border_color='*primary_950',
+    block_label_background_fill='*primary_50',
+    block_title_text_color='#636f85',
+    input_background_fill='*primary_50'
 )
 
-# Markdown content for description
-markdown_description = """
-### Welcome to our Partnershipday Demo!\n
-You can do a lot of great stuff with it!\n
-*Blablsbla \n
-This is placed above.
-"""
+with gr.Blocks(theme=theme) as demo:
+    ...
+    gr.Markdown("""
+    ### Welcome to our Partnershipday Demo!
+    What you see here is our FinAgent project.
+    You can enter a simple question about data stored in our sql database, our pdfs or the stock market.
+    You will receive the answer as well as the source of it. 
+    """)
+    
+    input_text = gr.Textbox(label="Your Question")
+    output_text = gr.Textbox(label="Result")
 
-interface = gr.Interface(
-    fn=main,
-    inputs=[gr.Textbox(label="Your Question"),gr.Markdown("\n\n### Additional Info\nThis appears below")], #Also a way to include text
-    outputs=gr.Textbox(label="Result"),
-    title="Partnershipday Demo",
-    description=markdown_description, 
-    theme="base",
-    flagging_mode="never",
-)
+    input_text.change(fn=main, inputs=input_text, outputs=output_text)
 
-
-interface.launch(share=True)
+demo.launch(share=True, debug=True)
