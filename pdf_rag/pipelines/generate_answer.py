@@ -9,7 +9,6 @@ from haystack.components.rankers import TransformersSimilarityRanker
 from haystack_integrations.components.generators.ollama import OllamaGenerator
 from haystack.components.builders import PromptBuilder
 import requests
-# from retrieval_pipeline import run_retriever, run_generator
 
 def format_execution_time(start_time, end_time):
     # Calculate the time difference
@@ -105,6 +104,22 @@ def run_retriever(query, embedder_name, top_k, top_k_r):
     retrieval_time = format_execution_time(start_time, end_time)
     print(f"Retrieval process finished. Total Retrieval time: {retrieval_time}")
 
+    # Extract and annotate page ranges for each context chunk
+    for ctx in reranked_context:
+        # Access provenance metadata
+        chunk_meta = ctx.meta.get('dl_meta', {}).get('meta', {})
+        pages = [prov['page_no']
+                 for item in chunk_meta.get('doc_items', [])
+                 for prov in item.get('prov', [])]
+        if pages:
+            lo, hi = min(pages), max(pages)
+            page_range = str(lo) if lo == hi else f"{lo}–{hi}"
+        else:
+            page_range = 'N/A'
+        # Store the computed page_range back into metadata
+        chunk_meta['page_range'] = page_range
+        ctx.meta['dl_meta']['meta'] = chunk_meta
+
     return reranked_context
 
 def run_generator(query, contexts, llm):
@@ -137,15 +152,41 @@ def run_generator(query, contexts, llm):
                 "query": query
             }
         })
-        answer = result["generator"]["replies"][0]
-        return answer
+        raw_answer = result["generator"]["replies"][0]
     except requests.exceptions.Timeout:
         # Handle the timeout exception
         print("A timeout occurred while processing the row.")
-        return "TIMEOUT"
+        raw_answer = "TIMEOUT"
     except Exception as e:
         # Handle other potential exceptions
         print(f"An error occurred: {e}")
+
+    # Remove the "Used chunk" line from the answer text
+    clean_answer = re.sub(r'\n?Used chunk(?:s)?:.*', '', raw_answer).strip()
+    print(f"Answer: {clean_answer}\n")
+
+    # Parse the original output to extract the used chunk index and its metadata
+    metadata = {}
+    match = re.search(r'Used chunk(?:s)?:\s*(\d+)', raw_answer)
+    if match:
+        idx = int(match.group(1))
+        selected_chunk = contexts[idx - 1]
+        # Extract metadata from the selected chunk
+        metadata['chunk_index'] = idx
+        metadata['page_range'] = selected_chunk.meta['dl_meta']['meta']['page_range']
+        metadata['filename'] = selected_chunk.meta['dl_meta']['meta']['origin']['filename']
+        metadata['all_metadata'] = selected_chunk.meta
+
+        print(f"Selected chunk index: {metadata['chunk_index']}")
+        print(f"Selected chunk filename: {metadata['filename']}")
+        print(f"Selected chunk page number range: {metadata['page_range']}")
+        
+    else:
+        selected_chunk = None
+        metadata = None
+        print("No selected chunk found.\n")
+
+    return clean_answer, metadata
 
 if __name__ == '__main__':
     embedders_mapping = {
@@ -165,47 +206,17 @@ if __name__ == '__main__':
     llm = 'gemma3:12b'
 
     # User question
-    query = 'What is the net sales of AMCOR in 2023?'
+    query = "Quel est le chiffre d'affaires net d'AMCOR en 2023 ?"
     # Run retriever
     contexts = run_retriever(query, embedder_name, top_k, top_k_r)
-
-    # Extract and annotate page ranges for each context chunk
-    for ctx in contexts:
-        # Access provenance metadata
-        chunk_meta = ctx.meta.get('dl_meta', {}).get('meta', {})
-        pages = [prov['page_no']
-                 for item in chunk_meta.get('doc_items', [])
-                 for prov in item.get('prov', [])]
-        if pages:
-            lo, hi = min(pages), max(pages)
-            page_range = str(lo) if lo == hi else f"{lo}–{hi}"
-        else:
-            page_range = 'N/A'
-        # Store the computed page_range back into metadata
-        chunk_meta['page_range'] = page_range
-        ctx.meta['dl_meta']['meta'] = chunk_meta
-
-    answer = run_generator(query, contexts, llm)
-    print(f"Answer: {answer}")
-
-    # Parse the LLM output to extract the used chunk index
-    match = re.search(r'Used chunk(?:s)?:\s*(\d+)', answer)
-    if match:
-        idx = int(match.group(1))
-        selected_chunk = contexts[idx - 1]
-        print(f"Selected chunk index: {idx}")
-        print(f"Selected chunk page number range: {selected_chunk.meta['dl_meta']['meta']['page_range']}")
-        print(f"Selected chunk filename: {selected_chunk.meta['dl_meta']['meta']['origin']['filename']}")
-        # print(f"Selected chunk metadata: {selected_chunk.meta}\n")
-    else:
-        selected_chunk = None
-        print("No selected chunk found.\n")
-
+    # Run generator
+    clean_answer, metadata = run_generator(query, contexts, llm)
+    print(clean_answer)
+    print(metadata)
     # Print contexts with page ranges and scores
     # for idx, ctx in enumerate(contexts, start=1):
     #     chunk_meta = ctx.meta['dl_meta']['meta']
     #     print(f"Context {idx} (pages {chunk_meta.get('page_range')}):")
     #     print(ctx.content)
     #     print(f"Score: {ctx.score}\n{'-'*50}")
-
     # print("End of contexts")

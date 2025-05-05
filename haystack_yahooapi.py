@@ -1,3 +1,4 @@
+import re
 from haystack.components.builders.prompt_builder import PromptBuilder
 from haystack_integrations.components.generators.ollama import OllamaGenerator
 from haystack import Pipeline
@@ -15,8 +16,7 @@ from haystack import tracing
 from haystack.tracing.logging_tracer import LoggingTracer
 from haystack.core.errors import PipelineRuntimeError
 import time
-from pdf_rag.pipelines.generate_answer import run_retriever
-#from pdf_rag.pipelines.generate_answer import run_generator
+from pdf_rag.pipelines.generate_answer import run_retriever, run_generator
 import yfinance as yf
 import ast 
 import gradio as gr
@@ -216,16 +216,17 @@ def main(input_text, _:None):
 
         # Parameters for rag 
         top_k = 30
-        top_k_r = 5
+        top_k_r = 3
         embedder_name = embedders_mapping['gte-base']
         llm = 'gemma3:12b'
         # User question
         query = question
         # Run retriever
-        result = run_retriever(query, embedder_name, top_k, top_k_r)
-        full_result = "No Metadata yet"
-        #result = run_generator(query, contexts, llm)
-        return result, full_result
+        contexts = run_retriever(query, embedder_name, top_k, top_k_r)
+        # Run generator
+        clean_answer, metadata = run_generator(query, contexts, llm)
+        
+        return clean_answer, metadata
 
     def nl_answer(question, result, lang):
         ##Answer in Natural Language
@@ -265,15 +266,26 @@ def main(input_text, _:None):
         metadat=metadat.replace("sql","").replace("","")
 
     elif "api" in direction:
-        result, metadat = apipipe(question)
+        result, metadata = apipipe(question)
 
     else:
-        result, metadat = ragpipe(question)
+        clean_answer, metadata = ragpipe(question)
 
+    final_output = clean_answer
 
-    final_output = nl_answer(question, result, lang)
-    final_output1 = final_output + "Answer query/source is:" + f"\n" + metadat + f"\n"
-    return final_output1
+    if metadata is not None:
+        filtered_meta = {k: v for k, v in metadata.items() if k != "all_metadata"}
+
+        # Build the lines
+        metadata_lines = "\n".join(f"{k}: {v}" for k, v in filtered_meta.items())
+
+        # Then assemble final_output1
+        final_output1 = f"{final_output}\n\nAnswer query/source is:\n{metadata_lines}\n"
+
+        return final_output1
+    else:
+        # If metadata is None, just return the final_output
+        return final_output
 
 theme = gr.themes.Soft().set(
     block_label_background_fill="*primary_50",
