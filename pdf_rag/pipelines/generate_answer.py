@@ -206,13 +206,12 @@ if __name__ == '__main__':
     llm = 'gemma3:12b'
 
     # User question
-    query = "Quel est le chiffre d'affaires net d'AMCOR en 2023 ?"
+    query = 'What is the net sales of AMCOR in 2023?'
     # Run retriever
     contexts = run_retriever(query, embedder_name, top_k, top_k_r)
     # Run generator
     clean_answer, metadata = run_generator(query, contexts, llm)
-    print(clean_answer)
-    print(metadata)
+
     # Print contexts with page ranges and scores
     # for idx, ctx in enumerate(contexts, start=1):
     #     chunk_meta = ctx.meta['dl_meta']['meta']

@@ -14,7 +14,7 @@ from haystack import tracing
 from haystack.tracing.logging_tracer import LoggingTracer
 from haystack.core.errors import PipelineRuntimeError
 import time
-from pdf_rag.pipelines.generate_answer import run_retriever
+from pdf_rag.pipelines.generate_answer import run_retriever, run_generator
 import yfinance as yf
 import ast 
 import gradio as gr
@@ -275,13 +275,16 @@ def main(input_text, _=None):
         top_k_r = 5
         embedder_name = embedders_mapping['gte-base']
         query = question
-        result = run_retriever(query, embedder_name, top_k, top_k_r)
+        # Run retriever
+        contexts = run_retriever(query, embedder_name, top_k, top_k_r)
         full_result = f"Answer found via RAG." + f"\n"+ "No Metadata yet"
+        #result = run_generator(query, contexts, llm)
         end_time = time.time()   
         rag_time = end_time - start_time
         rag_time = format_execution_time(start_time, end_time) 
         print(f"\n\nRAG process finished. Total RAG time: {rag_time}\n\n")
-        return result, full_result
+        
+        return clean_answer, metadata
 
     def nl_answer(question, result, lang):
         ##Answer in Natural Language
@@ -324,33 +327,53 @@ def main(input_text, _=None):
         result, metadat = apipipe(question)
 
     else:
-        result, metadat = ragpipe(question)
+        result, metadata = ragpipe(question)
 
 
     final_output = nl_answer(question, result, lang)
-    final_output1 = final_output + "Answer query/source is:" + f"\n" + metadat + f"\n"
-    allend_time = time.time()   
-    all_time = allend_time - allstarttime
-    all_time = format_execution_time(allstarttime, allend_time) 
-    print(f"\n\nThe whole process finished. Total process time: {all_time}\n\n")
-    log_file.close()
-    sys.stdout = sys.__stdout__
-    sys.stderr = sys.__stderr__
-    return final_output1
+    
+    if metadata is not None:
+        filtered_meta = {k: v for k, v in metadata.items() if k != "all_metadata"}
 
+        # Build the lines
+        metadata_lines = "\n".join(f"{k}: {v}" for k, v in filtered_meta.items())
 
+        # Then assemble final_output1
+        final_output1 = f"{final_output}\n\nAnswer query/source is:\n{metadata_lines}\n"
 
-###UI
-theme = gr.themes.Base().set(
-    body_text_color='white',
-    background_fill_primary='black',
-    block_background_fill='*primary_950',
-    block_border_color='*primary_900',
-    block_info_text_color='white',
-    block_label_background_fill='*primary_50',
-    block_title_text_color='white',
-    input_background_fill='black'
-)
+        allend_time = time.time()   
+        all_time = allend_time - allstarttime
+        all_time = format_execution_time(allstarttime, allend_time) 
+        print(f"\n\nThe whole process finished. Total process time: {all_time}\n\n")
+        log_file.close()
+        sys.stdout = sys.__stdout__
+        sys.stderr = sys.__stderr__
+
+        return final_output1
+    else:
+        # If metadata is None, just return the final_output
+        allend_time = time.time()   
+        all_time = allend_time - allstarttime
+        all_time = format_execution_time(allstarttime, allend_time) 
+        print(f"\n\nThe whole process finished. Total process time: {all_time}\n\n")
+        log_file.close()
+        sys.stdout = sys.__stdout__
+        sys.stderr = sys.__stderr__
+        
+        return final_output
+    
+
+theme = gr.themes.Base(primary_hue="blue", secondary_hue="purple", neutral_hue="gray") \
+    .set(
+        body_text_color="white",                # Overrides text color
+        background_fill_primary="#121212",      # Darker app background
+        block_background_fill="#1E1E1E",        # Panel backgrounds
+        block_border_color="*primary_950",      # References the 950 shade of your primary hue
+        input_background_fill="*neutral_300",    # References a neutral shade
+        loader_color="*primary_200",            # Loader accent
+        slider_color="*primary_300"             # Slider accent
+    )
+
 def clear_inputs():
     return "", ""
 
