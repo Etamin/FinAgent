@@ -3,10 +3,17 @@ RAG:
 "What is the net sales of AMCOR in 2023?"
 
 API:
-"What was the stock price for BGL BNP Paribas one month ago?" 
-"Was ist der aktuelle Aktienkurs für AccelorMittal?" 
+Stock price of Google, Apple, AccelorMittal and BGL BNP Paribas today/x days/months/years ago
 
 SQL:
 "Wieviel Geld wurde am 18.2.2025 vom Konto Nummer 3 überwiesen?"
 "What is the description of transaction no. 14?"
 "How often was debit used on account 10?"
+
+
+transactions: 1 - 54
+accounts: 1 - 10
+type: debit, credit
+description: Deposit, Salary, ATM Withdrawal, Online Purchase
+amount
+date

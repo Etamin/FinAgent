@@ -353,26 +353,25 @@ theme = gr.themes.Base().set(
 def clear_inputs():
     return "", ""
 
-with gr.Blocks(title="Parthnership Day Demo", theme=theme) as demo:
+with gr.Blocks(title="Partnership Day Demo", theme=theme) as demo:
     ...
     gr.Markdown("""
     ### Welcome to our Partnershipday Demo!
-    What you see here is our FinAgent project.
+    What you see here is a limited demonstration of our "FinAgent" project, that we created in collaboration with BGL BNP Paribas.
     You can enter a simple question about data stored in our sql database, our pdfs or the stock market.
     You will receive the answer as well as the source of it. 
     """)
 
 
-    with gr.Row():  # Horizontal layout
-        with gr.Column():  # Left side: input + buttons
+    with gr.Row(): 
+        with gr.Column():
             input_text = gr.Textbox(label="Your Question")
-            with gr.Row():  # Buttons in one row under input
+            with gr.Row(): 
                 clear_btn = gr.Button("Clear", variant="secondary")
                 start_btn = gr.Button("Start", variant="primary")
 
-        output_text = gr.Textbox(label="Result")  # Right side: output only
+        output_text = gr.Textbox(label="Result") 
 
-    # Button logic
     clear_btn.click(fn=clear_inputs, outputs=[input_text, output_text])
     start_btn.click(fn=main, inputs=input_text, outputs=output_text)
 
