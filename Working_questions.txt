@@ -1,16 +1,23 @@
 RAG:
-"Wéi héich waren d'Nettoverkaafszuelen no GAAP am Joer 2022?" 
-"What is the net sales of AMCOR in 2023?"
+How high were the net sales figures of AMCOR according to GAAP in the year 2022?
+What is the GAAP net income of AMCOR for Fiscal Year 2023?
+What is the adjusted EBIT 2023 for AMCOR?
+What is the net sales of AMCOR in 2023?
+How many ulta Beauty stores were open at the end of the 4th quarter of 2022?
+Qhat are the planned share repurchases of ulta Beauty for fiscal year 2023?
+On which exchange is Foot Locker Inc. registered?
+What is the most voted person at the Board of Directors of Foot Locker?
 
 API:
 Stock price of Google, Apple, AccelorMittal and BGL BNP Paribas today/x days/months/years ago
 
 SQL:
-"Wieviel Geld wurde am 18.2.2025 vom Konto Nummer 3 überwiesen?"
-"What is the description of transaction no. 14?"
-"How often was debit used on account 10?"
+More complex: How much money was transferred from account number 3 on 18.02.2025?
+How much money was transferred from on 15.02.2025?
+What is the description of transaction no. 1 - 14?
+How often was debit/credit used on account 1 - 10?
 
-
+Variation possibilities:
 transactions: 1 - 54
 accounts: 1 - 10
 type: debit, credit

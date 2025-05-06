@@ -155,6 +155,7 @@ def main(input_text, _=None):
               query=query.replace("sql","").replace("","")
               result = pd.read_sql(query, self.connection)
               results.append(f"{result}")
+            time.sleep(1)
             self.connection.close() 
             return {"results": results, "queries": queries}
 
@@ -310,7 +311,7 @@ def main(input_text, _=None):
     question, direction = classify_direction(question)
     direction = direction.strip().lower()
 
-    ###MAIN ACTION, 
+###MAIN ACTION, 
     if "sql" in direction:
         result, fullresult = sqlpipe(question)
         metadat = fullresult['sql_querier']['queries']
