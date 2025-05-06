@@ -78,7 +78,7 @@ if __name__ == '__main__':
     indexing_pipeline = build_indexing_pipeline(document_store, embedder_name)
 
     # 4- Run the pipeline
-    parent_folder = Path("/home/laura/PDay/FinAgent/pdf_rag/data/original_pdf")
+    parent_folder = Path("pdf_rag/data/original_pdf")
     pdf_paths = list(parent_folder.glob("*.pdf"))
   
     indexing_pipeline.run({"converter": {"paths": pdf_paths}})

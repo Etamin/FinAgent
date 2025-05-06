@@ -14,7 +14,7 @@ import requests
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
-load_dotenv(dotenv_path="/home/laura/PDay/FinAgent/pdf_rag/pipelines/.env")
+load_dotenv()
 
 def format_execution_time(start_time, end_time):
     # Calculate the time difference
@@ -142,7 +142,7 @@ def run_retriever(query, embedder_name, top_k, top_k_r):
 
 def run_generator(query, contexts, llm):
     # Read the prompt template
-    template_path = "/home/laura/PDay/FinAgent/pdf_rag/pipelines/prompt.txt"  # Assuming the file is in the same directory
+    template_path = "pdf_rag/pipelines/prompt.txt"  # Assuming the file is in the same directory
     with open(template_path, "r") as f:
         template = f.read()
 

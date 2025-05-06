@@ -171,7 +171,7 @@ def main(input_text, _=None):
                     Columns: {{columns}};"
                     Answer:"""
 
-        sql_query = SQLQuery('/home/laura/PDay/FinAgent/bank_demo.db')
+        sql_query = SQLQuery('bank_demo.db')
 
         sql_pipe= Pipeline()
         sql_pipe.add_component("sql_prompt", PromptBuilder(sql_prompt, required_variables=[]))
