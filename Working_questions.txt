@@ -1,6 +1,6 @@
 RAG:
 ✅ What is the most voted person at the Board of Directors of Foot Locker?
-✅ What is the most voted person at the Board of Directors of Foot Locker?What is the net sales of AMCOR in 2023?
+✅ What is the net sales of AMCOR in 2023?
 ❌ How high were the net sales figures of AMCOR according to GAAP in the year 2022?
 ❌ What is the GAAP net income of AMCOR for Fiscal Year 2023?
 

@@ -40,7 +40,7 @@ class DualStreamHandler:
         return self.terminal.isatty()
     
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-log_filename = f"/home/laura/PDay/FinAgent/logs/FinAgent_log_{timestamp}.log"
+log_filename = f"logs/FinAgent_log_{timestamp}.log"
 log_file = open(log_filename, "w")
 logging.basicConfig(filename=log_filename, level=logging.DEBUG)
 log_stream = open(log_filename, "a")  # Open in append mode
@@ -336,10 +336,8 @@ def main(input_text, _=None):
     elif "api" in direction:
         result, metadata = apipipe(question)
 
-    else:
-        result, metadata = ragpipe(question)
-
     if "rag" in direction:
+        result, metadata = ragpipe(question)
         final_output = result
 
         suffix = ""
