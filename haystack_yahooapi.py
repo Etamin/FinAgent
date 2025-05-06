@@ -171,7 +171,7 @@ def main(input_text, _=None):
                     Columns: {{columns}};"
                     Answer:"""
 
-        sql_query = SQLQuery('bank_demo.db')
+        sql_query = SQLQuery('/home/laura/PDay/FinAgent/bank_demo.db')
 
         sql_pipe= Pipeline()
         sql_pipe.add_component("sql_prompt", PromptBuilder(sql_prompt, required_variables=[]))
@@ -236,7 +236,7 @@ def main(input_text, _=None):
             api_prompt_result = ast.literal_eval(llm_reply)
             ticker_symbol, period = api_prompt_result[0], api_prompt_result[1]
 
-            url = f"https://query2.finance.yahoo.com/v8/finance/chart/{ticker_symbol}?range=period&interval=1d"
+            url = f"https://query2.finance.yahoo.com/v8/finance/chart/{ticker_symbol}?range={period}&interval=1d"
             response = session.get(url)
             time.sleep(1)
             data_json = response.json()
@@ -282,8 +282,6 @@ def main(input_text, _=None):
         top_k_r = 5
         embedder_name = embedders_mapping['gte-base']
         llm = 'o4-mini'
-        # User question
-        query = question
         query = query[0]
         # Run retriever
         contexts = run_retriever(query, embedder_name, top_k, top_k_r)
@@ -336,46 +334,29 @@ def main(input_text, _=None):
     elif "api" in direction:
         result, metadata = apipipe(question)
 
-    else:
+    elif "rag" in direction:
         result, metadata = ragpipe(question)
-
-    if "rag" in direction:
         final_output = result
 
-        suffix = ""
         if metadata:
             # drop the “all_metadata” entry
             filtered_meta = {
                 k: v for k, v in metadata.items()
                 if k != "all_metadata"
             }
-            metadata_lines = "\n".join(f"{k}: {v}" for k, v in filtered_meta.items())
+            metadata = "\n".join(f"{k}: {v}" for k, v in filtered_meta.items())
 
-            suffix = f"\n\nAnswer query/source is:\n{metadata_lines}\n"
 
-        # 2) Assemble the final output once
-        final_output1 = f"{final_output}{suffix}"
-
-        # 3) Common cleanup & timing
-        allend_time = time.time()
-        all_time = format_execution_time(allstarttime, allend_time)
-        print(f"\n\nThe whole process finished. Total process time: {all_time}\n\n")
-        log_file.close()
-        sys.stdout = sys.__stdout__
-        sys.stderr = sys.__stderr__
-
-        return final_output1
-    else:
-        final_output = nl_answer(question, result, lang)
-        final_output1 = final_output + "Answer query/source is:" + f"\n" + metadata + f"\n"
-        allend_time = time.time()   
-        all_time = allend_time - allstarttime
-        all_time = format_execution_time(allstarttime, allend_time) 
-        print(f"\n\nThe whole process finished. Total process time: {all_time}\n\n")
-        log_file.close()
-        sys.stdout = sys.__stdout__
-        sys.stderr = sys.__stderr__
-        return final_output1
+    final_output = nl_answer(question, result, lang)
+    final_output1 = final_output + "Answer query/source is:" + f"\n" + metadata + f"\n"
+    allend_time = time.time()   
+    all_time = allend_time - allstarttime
+    all_time = format_execution_time(allstarttime, allend_time) 
+    print(f"\n\nThe whole process finished. Total process time: {all_time}\n\n")
+    log_file.close()
+    sys.stdout = sys.__stdout__
+    sys.stderr = sys.__stderr__
+    return final_output1
 
 
 ###UI
