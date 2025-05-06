@@ -273,9 +273,9 @@ def main(input_text, _=None):
 
         # Parameters for rag 
         top_k = 30
-        top_k_r = 3
+        top_k_r = 5
         embedder_name = embedders_mapping['gte-base']
-        llm = 'gemma3:12b'
+        llm = 'o4-mini'
         # User question
         query = question
         query = query[0]
@@ -362,7 +362,7 @@ def main(input_text, _=None):
         return final_output1
     else:
         final_output = nl_answer(question, result, lang)
-        final_output1 = final_output + "Answer query/source is:" + f"\n" + metadat + f"\n"
+        final_output1 = final_output + "Answer query/source is:" + f"\n" + metadata + f"\n"
         allend_time = time.time()   
         all_time = allend_time - allstarttime
         all_time = format_execution_time(allstarttime, allend_time) 

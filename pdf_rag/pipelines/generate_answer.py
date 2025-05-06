@@ -8,7 +8,13 @@ from haystack_integrations.components.retrievers.qdrant import QdrantEmbeddingRe
 from haystack.components.rankers import TransformersSimilarityRanker
 from haystack_integrations.components.generators.ollama import OllamaGenerator
 from haystack.components.builders import PromptBuilder
+from haystack.components.generators import OpenAIGenerator
+from haystack.utils import Secret
 import requests
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 def format_execution_time(start_time, end_time):
     # Calculate the time difference
@@ -36,20 +42,32 @@ def get_embedders(embedder_name):
 
     return docs_embedder, q_embedder
 
+_document_store = None  # Singleton placeholder
 def load_index():
-    persistent_path = "qdrant"
-    document_store = QdrantDocumentStore(
-        # ":memory:",
-        path=persistent_path,
-        index="dense",
-        recreate_index=False,
-        hnsw_config={"m": 16, "ef_construct": 100},  # Optional
-        # Please choose one of the options: cosine, dot_product, l2
-        similarity='cosine',
-        on_disk=True
-    )
+    global _document_store
+    if _document_store is None:
+        _document_store = QdrantDocumentStore(
+            path="qdrant",
+            index="dense",
+            recreate_index=False,
+            similarity='cosine',
+            on_disk=True
+        )
+    return _document_store
+# def load_index():
+#     persistent_path = "qdrant"
+#     document_store = QdrantDocumentStore(
+#         # ":memory:",
+#         path=persistent_path,
+#         index="dense",
+#         recreate_index=False,
+#         hnsw_config={"m": 16, "ef_construct": 100},  # Optional
+#         # Please choose one of the options: cosine, dot_product, l2
+#         similarity='cosine',
+#         on_disk=True
+#     )
 
-    return document_store
+#     return document_store
 
 def retrieve_context(query, document_store, top_k, embedder_name):
     # Components
@@ -132,12 +150,13 @@ def run_generator(query, contexts, llm):
 
     prompt_builder = PromptBuilder(template=template)
 
-    generator = OllamaGenerator(
-        model=llm,
-        url="http://localhost:11434", # http://localhost:11434 for local inference and http://trux-dgx01.uni.lux:11434/ for DGX
-        system_prompt=system_prompt,
-        timeout=750
-    )
+    generator = OpenAIGenerator(api_key=Secret.from_env_var("OPENAI_API_KEY"))
+    # generator = OllamaGenerator(
+    #     model=llm,
+    #     url="http://localhost:11434", # http://localhost:11434 for local inference and http://trux-dgx01.uni.lux:11434/ for DGX
+    #     system_prompt=system_prompt,
+    #     timeout=750
+    # )
 
     # Create the pipeline and add components
     pipe = Pipeline()
@@ -201,12 +220,14 @@ if __name__ == '__main__':
     
     # Parameters
     top_k = 30
-    top_k_r = 3
+    top_k_r = 5
     embedder_name = embedders_mapping['gte-base']
-    llm = 'gemma3:12b'
+    # llm = 'gemma3:12b'
+    llm = 'o4-mini'
 
     # User question
-    query = 'What is the net sales of AMCOR in 2023?'
+    query = "What is the most voted person at the Board of Directors of Foot Locker?"
+
     # Run retriever
     contexts = run_retriever(query, embedder_name, top_k, top_k_r)
     # Run generator
