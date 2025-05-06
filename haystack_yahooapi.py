@@ -40,9 +40,10 @@ class DualStreamHandler:
         return self.terminal.isatty()
     
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-log_file = open(f"FinAgent_log_{timestamp}.log", "w")
-logging.basicConfig(filename=f"FinAgent_log_{timestamp}.log", level=logging.DEBUG)
-log_stream = open(f"FinAgent_log_{timestamp}.log", "a")  # Open in append mode
+log_filename = f"logs/FinAgent_log_{timestamp}.log"
+log_file = open(log_filename, "w")
+logging.basicConfig(filename=log_filename, level=logging.DEBUG)
+log_stream = open(log_filename, "a")  # Open in append mode
 dual_handler = DualStreamHandler(sys.stdout, log_stream)
 sys.stdout = dual_handler
 sys.stderr = dual_handler
@@ -272,18 +273,22 @@ def main(input_text, _=None):
 
         # Parameters for rag 
         top_k = 30
-        top_k_r = 5
+        top_k_r = 3
         embedder_name = embedders_mapping['gte-base']
+        llm = 'gemma3:12b'
+        # User question
         query = question
+        query = query[0]
         # Run retriever
         contexts = run_retriever(query, embedder_name, top_k, top_k_r)
-        full_result = f"Answer found via RAG." + f"\n"+ "No Metadata yet"
-        #result = run_generator(query, contexts, llm)
+        # Run generator
+        clean_answer, metadata = run_generator(query, contexts, llm)
+
         end_time = time.time()   
         rag_time = end_time - start_time
         rag_time = format_execution_time(start_time, end_time) 
         print(f"\n\nRAG process finished. Total RAG time: {rag_time}\n\n")
-        
+
         return clean_answer, metadata
 
     def nl_answer(question, result, lang):
@@ -317,33 +322,38 @@ def main(input_text, _=None):
 ###MAIN ACTION, 
     if "sql" in direction:
         result, fullresult = sqlpipe(question)
-        metadat = fullresult['sql_querier']['queries']
-        metadat=metadat[0]
-        metadat=metadat.replace("```sql","").replace("```","")
-        metadat=metadat.replace("sql","").replace("","")
-        metadat=f"Answer found via SQL." + f"\n" + metadat
+        metadata = fullresult['sql_querier']['queries']
+        metadata=metadata[0]
+        metadata=metadata.replace("```sql","").replace("```","")
+        metadata=metadata.replace("sql","").replace("","")
+        metadata=f"Answer found via SQL." + f"\n" + metadata
 
     elif "api" in direction:
-        result, metadat = apipipe(question)
+        result, metadata = apipipe(question)
 
     else:
         result, metadata = ragpipe(question)
 
+    if "rag" in direction:
+        final_output = result
 
-    final_output = nl_answer(question, result, lang)
-    
-    if metadata is not None:
-        filtered_meta = {k: v for k, v in metadata.items() if k != "all_metadata"}
+        suffix = ""
+        if metadata:
+            # drop the “all_metadata” entry
+            filtered_meta = {
+                k: v for k, v in metadata.items()
+                if k != "all_metadata"
+            }
+            metadata_lines = "\n".join(f"{k}: {v}" for k, v in filtered_meta.items())
 
-        # Build the lines
-        metadata_lines = "\n".join(f"{k}: {v}" for k, v in filtered_meta.items())
+            suffix = f"\n\nAnswer query/source is:\n{metadata_lines}\n"
 
-        # Then assemble final_output1
-        final_output1 = f"{final_output}\n\nAnswer query/source is:\n{metadata_lines}\n"
+        # 2) Assemble the final output once
+        final_output1 = f"{final_output}{suffix}"
 
-        allend_time = time.time()   
-        all_time = allend_time - allstarttime
-        all_time = format_execution_time(allstarttime, allend_time) 
+        # 3) Common cleanup & timing
+        allend_time = time.time()
+        all_time = format_execution_time(allstarttime, allend_time)
         print(f"\n\nThe whole process finished. Total process time: {all_time}\n\n")
         log_file.close()
         sys.stdout = sys.__stdout__
@@ -351,7 +361,8 @@ def main(input_text, _=None):
 
         return final_output1
     else:
-        # If metadata is None, just return the final_output
+        final_output = nl_answer(question, result, lang)
+        final_output1 = final_output + "Answer query/source is:" + f"\n" + metadat + f"\n"
         allend_time = time.time()   
         all_time = allend_time - allstarttime
         all_time = format_execution_time(allstarttime, allend_time) 
@@ -359,21 +370,21 @@ def main(input_text, _=None):
         log_file.close()
         sys.stdout = sys.__stdout__
         sys.stderr = sys.__stderr__
-        
-        return final_output
+        return final_output1
+
     
 
-theme = gr.themes.Base(primary_hue="blue", secondary_hue="purple", neutral_hue="gray") \
-    .set(
-        body_text_color="white",                # Overrides text color
-        background_fill_primary="#121212",      # Darker app background
-        block_background_fill="#1E1E1E",        # Panel backgrounds
-        block_border_color="*primary_950",      # References the 950 shade of your primary hue
-        input_background_fill="*neutral_300",    # References a neutral shade
-        loader_color="*primary_200",            # Loader accent
-        slider_color="*primary_300"             # Slider accent
-    )
-
+###UI
+theme = gr.themes.Base().set(
+    body_text_color='white',
+    background_fill_primary='black',
+    block_background_fill='*primary_950',
+    block_border_color='*primary_900',
+    block_info_text_color='white',
+    block_label_background_fill='*primary_50',
+    block_title_text_color='white',
+    input_background_fill='black'
+)
 def clear_inputs():
     return "", ""
 
