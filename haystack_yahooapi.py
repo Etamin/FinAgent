@@ -40,7 +40,7 @@ class DualStreamHandler:
         return self.terminal.isatty()
     
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-log_filename = f"logs/FinAgent_log_{timestamp}.log"
+log_filename = f"/home/laura/PDay/FinAgent/logs/FinAgent_log_{timestamp}.log"
 log_file = open(log_filename, "w")
 logging.basicConfig(filename=log_filename, level=logging.DEBUG)
 log_stream = open(log_filename, "a")  # Open in append mode
@@ -55,6 +55,7 @@ tracing.enable_tracing(LoggingTracer(tags_color_strings={
 
 
 def main(input_text, _=None):
+    print("FinAgent is ready!")
     allstarttime = time.time()
 
     def format_execution_time(start_time, end_time):
@@ -122,7 +123,7 @@ def main(input_text, _=None):
 
         Only if the question is about account balance (with account name), transactions (like transfer, money movements), payment, answer "sql".  Number can also refer to ID.
         Only if the question is about stock market, answer "api".
-        Only if the question is about something else, answer "rag".
+        Only if the question is about AMCOR, Ulta Beauty, Food Locker or something else, answer "rag".
 
         Only use information that is present in the passage. 
         Make sure your response is a simple string that only can be 'sql' or 'api' or "rag". No explanation or notes.
@@ -183,7 +184,8 @@ def main(input_text, _=None):
         try:
             fullresult = sql_pipe.run({
             "sql_prompt": {"question": question, "columns": columns},})
-            result= fullresult['sql_querier']['results']  
+            result= fullresult['sql_querier']['results'] 
+            fullresult =fullresult['sql_querier']['queries'] 
             if "none" in str(result).lower():
                 result = "No Answer"
                 #result = ragpipe(question) #If sql retrieves no answer, go to rag (questions to similar)
@@ -191,8 +193,9 @@ def main(input_text, _=None):
         except PipelineRuntimeError as e: 
             print(f"\n\nSQL Pipeline failed with error: {e}\n\n") 
             result = "No Answer"
+            fullresult = "No Answer"
             #result = ragpipe(question)
-            #fullresult = "RAG"
+            #fullresult = "No Answer"
         end_time = time.time()   
         sql_time = end_time - start_time
         sql_time = format_execution_time(start_time, end_time) 
@@ -202,6 +205,7 @@ def main(input_text, _=None):
 
     ###API
     def apipipe(question):
+        session = requests.Session(impersonate="chrome")
         start_time = time.time()
         #api prompt
         api_prompt = """If the company name mentioned in the question: "{{question}}" is explicitly APPLE, GOOGLE, BNP BGL PARIBAS or ACCELOR MITTAL, select a ticker symbol from this: {{tickers}}. If none of Apple, Google, BNP BGL Paribas or Accelor Mittal is explicitely mentioned, choose "None" as ticker symbol.
@@ -232,19 +236,21 @@ def main(input_text, _=None):
             api_prompt_result = ast.literal_eval(llm_reply)
             ticker_symbol, period = api_prompt_result[0], api_prompt_result[1]
 
-
-            session = requests.Session(impersonate="chrome")
-
-            #Get stock data using yfinance
-            ticker = yf.Ticker(ticker_symbol, session=session)
+            url = f"https://query2.finance.yahoo.com/v8/finance/chart/{ticker_symbol}?range=period&interval=1d"
+            response = session.get(url)
             time.sleep(1)
-            data = ticker.history(period=period)
-            time.sleep(1)
-
-            fullapiresult = f"Answer found via API." + f"\n" +"API Call: yf.Ticker('{ticker_symbol}').history(period='{period}')" + f"\n\n" + f"GET REQUEST: https://query1.finance.yahoo.com/v8/finance/chart/{ticker_symbol}?range={period}&interval=1d"
-
-
-            close_value = data.loc[data.index[0], "Close"]
+            data_json = response.json()
+            result = data_json['chart']['result'][0]
+            timestamps = result['timestamp']
+            indicators = result['indicators']['quote'][0]
+            data = pd.DataFrame(indicators)
+            data['timestamp'] = pd.to_datetime(timestamps, unit='s')
+            data.set_index('timestamp', inplace=True)
+            fullapiresult = (
+                f"Answer found via API.\n"
+                f"API Call: GET {url}\n\n"
+            )
+            close_value = data.loc[data.index[0], "close"]
             latest_date = data.index[0]
             latest_date_str = latest_date.date().isoformat()
             result = f"Current value: {close_value} on date: {latest_date_str}"
@@ -321,8 +327,7 @@ def main(input_text, _=None):
 
 ###MAIN ACTION, 
     if "sql" in direction:
-        result, fullresult = sqlpipe(question)
-        metadata = fullresult['sql_querier']['queries']
+        result, metadata = sqlpipe(question)
         metadata=metadata[0]
         metadata=metadata.replace("```sql","").replace("```","")
         metadata=metadata.replace("sql","").replace("","")
@@ -372,7 +377,6 @@ def main(input_text, _=None):
         sys.stderr = sys.__stderr__
         return final_output1
 
-    
 
 ###UI
 theme = gr.themes.Base().set(
