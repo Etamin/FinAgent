@@ -123,7 +123,7 @@ def main(input_text, _=None):
 
         Only if the question is about account balance (with account name), transactions (like transfer, money movements), payment, answer "sql".  Number can also refer to ID.
         Only if the question is about stock market, answer "api".
-        Only if the question is about AMCOR, Ulta Beauty, Food Locker or something else, answer "rag".
+        Only if the question is about AMCOR, Ulta Beauty, Foot Locker or something else, answer "rag".
 
         Only use information that is present in the passage. 
         Make sure your response is a simple string that only can be 'sql' or 'api' or "rag". No explanation or notes.
@@ -282,7 +282,7 @@ def main(input_text, _=None):
         top_k_r = 5
         embedder_name = embedders_mapping['gte-base']
         llm = 'o4-mini'
-        query = query[0]
+        # query = query[0]
         # Run retriever
         contexts = run_retriever(query, embedder_name, top_k, top_k_r)
         # Run generator
@@ -348,7 +348,10 @@ def main(input_text, _=None):
 
 
     final_output = nl_answer(question, result, lang)
-    final_output1 = final_output + "Answer query/source is:" + f"\n" + metadata + f"\n"
+    if metadata:
+        final_output1 = final_output + "Answer query/source is:" + f"\n" + metadata + f"\n"
+    else:
+        final_output1 = final_output
     allend_time = time.time()   
     all_time = allend_time - allstarttime
     all_time = format_execution_time(allstarttime, allend_time) 
