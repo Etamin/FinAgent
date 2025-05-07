@@ -40,7 +40,7 @@ class DualStreamHandler:
         return self.terminal.isatty()
     
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-log_filename = f"logs/FinAgent_log_{timestamp}.log"
+log_filename = f"/home/laura/PDay/FinAgent/logs/FinAgent_log_{timestamp}.log"
 log_file = open(log_filename, "w")
 logging.basicConfig(filename=log_filename, level=logging.DEBUG)
 log_stream = open(log_filename, "a")  # Open in append mode
@@ -171,7 +171,7 @@ def main(input_text, _=None):
                     Columns: {{columns}};"
                     Answer:"""
 
-        sql_query = SQLQuery('bank_demo.db')
+        sql_query = SQLQuery('/home/laura/PDay/FinAgent/bank_demo.db')
 
         sql_pipe= Pipeline()
         sql_pipe.add_component("sql_prompt", PromptBuilder(sql_prompt, required_variables=[]))
@@ -373,18 +373,28 @@ theme = gr.themes.Base().set(
     block_title_text_color='white',
     input_background_fill='black'
 )
+
 def clear_inputs():
     return "", ""
 
 with gr.Blocks(title="Partnership Day Demo", theme=theme) as demo:
-    ...
     gr.Markdown("""
     ### Welcome to our Partnershipday Demo!
     What you see here is a limited demonstration of our "FinAgent" project, that we created in collaboration with BGL BNP Paribas.
     You can enter a simple question about data stored in our sql database, our pdfs or the stock market.
     You will receive the answer as well as the source of it. 
     """)
-
+    
+    gr.HTML("""
+        <script>
+            window.onload = function() {
+                const input = document.querySelector('input[type="text"]');
+                if (input) {
+                    input.focus();
+                }
+            }
+        </script>
+    """)
 
     with gr.Row(): 
         with gr.Column():
@@ -395,7 +405,9 @@ with gr.Blocks(title="Partnership Day Demo", theme=theme) as demo:
 
         output_text = gr.Textbox(label="Result") 
 
-    clear_btn.click(fn=clear_inputs, outputs=[input_text, output_text])
+    #trigger main with both button and Enter key
     start_btn.click(fn=main, inputs=input_text, outputs=output_text)
+    input_text.submit(fn=main, inputs=input_text, outputs=output_text)
+    clear_btn.click(fn=clear_inputs, outputs=[input_text, output_text])
 
 demo.launch(share=True, debug=True)
