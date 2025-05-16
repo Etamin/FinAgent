@@ -169,10 +169,10 @@ def main(input_text, _=None):
         start_time = time.time()
 
         ##columns found in the specified database [CUSTOM]
-        columns = "ROWID;transaction_id;account_id;date;amount;description;type"
+        columns = "ROWID;transaction_id;account_id;date;amount_eur;description;type"
 
         ##template prompt for sql query
-        sql_prompt = """Please generate an SQL query. The query should answer the following Question: {{question}};
+        sql_prompt = """Please generate an SQL query. The query should answer the following Question: {{question}}; Use Currency from column names.
                     The query is to be answered for the table is called 'transactions' with the following
                     Columns: {{columns}};"
                     Answer:"""
