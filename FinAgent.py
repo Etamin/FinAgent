@@ -53,11 +53,12 @@ tracing.enable_tracing(LoggingTracer(tags_color_strings={
     "haystack.component.name": "\x1b[1;34m"
 }))
 
-
+#wrapped in main function for gradio UI
 def main(input_text, _=None):
     print("FinAgent is ready!")
     allstarttime = time.time()
 
+    #time formatting
     def format_execution_time(start_time, end_time):
         execution_time = end_time - start_time
         hours, rem = divmod(execution_time, 3600)
@@ -75,9 +76,8 @@ def main(input_text, _=None):
     template_de = "Translate {{query}} to German. Just answer with the translated text."
     template_en = "Translate {{query}} to English. Just answer with the translated text."
 
-    pipe = Pipeline()
-
     ##translation components
+    pipe = Pipeline()
     pipe.add_component("prompt_builder_base", PromptBuilder(template=langtemplate, required_variables=[]))
     pipe.add_component("basellm", OllamaGenerator(model="gemma3:12b"))
     pipe.connect("prompt_builder_base", "basellm")
@@ -91,7 +91,7 @@ def main(input_text, _=None):
     pipe.add_component("llm1", OllamaGenerator(model="gemma3:12b"))
     pipe.connect("prompt_builder1", "llm1")
 
-    ##translation output
+    
     #first check language
     lang1 = pipe.run({"prompt_builder_base":{"query": input_text}})
     lang = lang1["basellm"]["replies"][0]
@@ -103,7 +103,7 @@ def main(input_text, _=None):
         output1 = output["llm"]["replies"][0]
         question = pipe.run({"prompt_builder1":{"query": output1}})
         question = question["llm1"]["replies"][0]
-    else: #translate de and fr to en
+    else: #translate de and fr to en (other languages work too)
         output = pipe.run({"prompt_builder1":{"query": input_text}})
         question = output["llm1"]["replies"]
 
@@ -112,12 +112,12 @@ def main(input_text, _=None):
     translation_time = format_execution_time(start_time, end_time) 
     print(f"\n\nTranslation process finished. Total Translation time: {translation_time}\n\n")
 
+    ###ROUTING
     def classify_direction(question):
         ###Decide which interface to use and output the direction
         start_time = time.time()
-        routpipe = Pipeline()
 
-        # Prompt template for port (sql/api/rag) classification
+        ##Prompt template for port (sql/api/rag) classification
         routprompt = """
         Create a classification result from the question: {{question}}.
 
@@ -130,11 +130,13 @@ def main(input_text, _=None):
         Answer:
         """
 
+        ##routing components
+        routpipe = Pipeline()
         routpipe.add_component("rout_prompt", PromptBuilder(template=routprompt, required_variables=[]))
         routpipe.add_component("routllm", OllamaGenerator(model="gemma3:12b"))
-
         routpipe.connect("rout_prompt", "routllm")
 
+        #get direction
         direction = routpipe.run({"rout_prompt":{"question":question}})
         direction = direction["routllm"]["replies"][0]  
         end_time = time.time()   
@@ -143,6 +145,8 @@ def main(input_text, _=None):
         print(f"\n\nRouting process finished. Total Routing time: {routing_time}\n\n")
         return question, direction
 
+
+    ###SQL
     @component
     class SQLQuery:
 
@@ -163,16 +167,20 @@ def main(input_text, _=None):
 
     def sqlpipe(question):
         start_time = time.time()
-        ###SQL Query
+
+        ##columns found in the specified database [CUSTOM]
         columns = "ROWID;transaction_id;account_id;date;amount;description;type"
 
+        ##template prompt for sql query
         sql_prompt = """Please generate an SQL query. The query should answer the following Question: {{question}};
                     The query is to be answered for the table is called 'transactions' with the following
                     Columns: {{columns}};"
                     Answer:"""
 
+        ##database path
         sql_query = SQLQuery('/home/laura/PDay/FinAgent/bank_demo.db')
 
+        ##sql pipeline components
         sql_pipe= Pipeline()
         sql_pipe.add_component("sql_prompt", PromptBuilder(sql_prompt, required_variables=[]))
         sql_pipe.add_component("sqlllm", OllamaGenerator(model="gemma3:12b"))
@@ -181,6 +189,7 @@ def main(input_text, _=None):
         sql_pipe.connect("sql_prompt", "sqlllm")
         sql_pipe.connect("sqlllm.replies", "sql_querier.queries")
 
+        ##SQL pipeline with fallback for error
         try:
             fullresult = sql_pipe.run({
             "sql_prompt": {"question": question, "columns": columns},})
@@ -188,14 +197,10 @@ def main(input_text, _=None):
             fullresult =fullresult['sql_querier']['queries'] 
             if "none" in str(result).lower():
                 result = "No Answer"
-                #result = ragpipe(question) #If sql retrieves no answer, go to rag (questions to similar)
-                #fullresult = "RAG"
         except PipelineRuntimeError as e: 
             print(f"\n\nSQL Pipeline failed with error: {e}\n\n") 
             result = "No Answer"
             fullresult = "No Answer"
-            #result = ragpipe(question)
-            #fullresult = "No Answer"
         end_time = time.time()   
         sql_time = end_time - start_time
         sql_time = format_execution_time(start_time, end_time) 
@@ -205,9 +210,10 @@ def main(input_text, _=None):
 
     ###API
     def apipipe(question):
-        session = requests.Session(impersonate="chrome")
+        session = requests.Session(impersonate="chrome") #specified for used yfinance api
         start_time = time.time()
-        #api prompt
+
+        ##api prompt template
         api_prompt = """If the company name mentioned in the question: "{{question}}" is explicitly APPLE, GOOGLE, BNP BGL PARIBAS or ACCELOR MITTAL, select a ticker symbol from this: {{tickers}}. If none of Apple, Google, BNP BGL Paribas or Accelor Mittal is explicitely mentioned, choose "None" as ticker symbol.
         If a concrete time period is mentioned, convert it like this: e.g. 2 months to "2mo" or one year to "1y", otherwise insert "1d".
 
@@ -217,14 +223,16 @@ def main(input_text, _=None):
         Make sure your response stricktly follows the format.
         Do not include anything else in your Answer."""
 
-
+        ##used ticker symbols [CUSTOM]
         tickers = "BNP.PA, GOOG, AAPL, MT, None"
 
+        ##api pipeline components
         api_pipe = Pipeline()
         api_pipe.add_component("api_prompt", PromptBuilder(api_prompt, required_variables=["tickers", "question"]))
         api_pipe.add_component("apillm", OllamaGenerator(model="gemma3:12b"))
         api_pipe.connect("api_prompt", "apillm")
 
+        ##api pipeline with fallback
         result = api_pipe.run({
             "question": question,
             "tickers": tickers,
@@ -240,7 +248,7 @@ def main(input_text, _=None):
             response = session.get(url)
             time.sleep(1)
             data_json = response.json()
-            result = data_json['chart']['result'][0]
+            result = data_json['chart']['result'][0] #get certain result from json
             timestamps = result['timestamp']
             indicators = result['indicators']['quote'][0]
             data = pd.DataFrame(indicators)
@@ -265,6 +273,7 @@ def main(input_text, _=None):
             fullapiresult = "Broken Api Call"
             return result, fullapiresult
 
+    ###RAG
     def ragpipe(query):
         start_time = time.time()
         embedders_mapping = {
@@ -277,15 +286,14 @@ def main(input_text, _=None):
                 'multi-qa-cos': 'sentence-transformers/multi-qa-mpnet-base-cos-v1'
         }
 
-        # Parameters for rag 
+        ##Parameters for rag [CUSTOM]
         top_k = 30
         top_k_r = 5
         embedder_name = embedders_mapping['gte-base']
         llm = 'o4-mini'
-        # query = query[0]
-        # Run retriever
+        #Run retriever
         contexts = run_retriever(query, embedder_name, top_k, top_k_r)
-        # Run generator
+        #Run generator
         clean_answer, metadata = run_generator(query, contexts, llm)
 
         end_time = time.time()   
@@ -294,9 +302,9 @@ def main(input_text, _=None):
         print(f"\n\nRAG process finished. Total RAG time: {rag_time}\n\n")
 
         return clean_answer, metadata
-
+    
+    ###Answer in Natural Language (Output in origininal language + English)
     def nl_answer(question, result, lang):
-        ##Answer in Natural Language
         start_time = time.time()
         nllm = OllamaGenerator(model="gemma3:12b")
         out_prompt= PromptBuilder(template="""Based on question: '{{question}}' provide the result:{{query_result}}. Build an answer in normal language containing both. Do not provide extra Information (like language used) or explanations, just the plain Answer. Explain not, what any model does or did. Provide in English and a second time in the following language:{{lang}}. If there is 'None', 'No Answer' or an empty string in the result, just answer 'No Answer.'""", required_variables=[])
@@ -320,10 +328,11 @@ def main(input_text, _=None):
         print(f"\n\nGenerating Answer in Natural Language finished. Total Generation time: {answer_time}\n\n")
         return result
 
+
+    ###MAIN ACTION
     question, direction = classify_direction(question)
     direction = direction.strip().lower()
 
-###MAIN ACTION, 
     if "sql" in direction:
         result, metadata = sqlpipe(question)
         metadata=metadata[0]
@@ -364,14 +373,14 @@ def main(input_text, _=None):
 
 ###UI
 theme = gr.themes.Base().set(
-    body_text_color='white',
-    background_fill_primary='black',
+    body_text_color='black',
+    background_fill_primary='white',
     block_background_fill='*primary_950',
     block_border_color='*primary_900',
-    block_info_text_color='white',
+    block_info_text_color='black',
     block_label_background_fill='*primary_50',
-    block_title_text_color='white',
-    input_background_fill='black'
+    block_title_text_color='black',
+    input_background_fill='white'
 )
 
 def clear_inputs():
@@ -384,7 +393,7 @@ with gr.Blocks(title="Partnership Day Demo", theme=theme) as demo:
     You can enter a simple question about data stored in our sql database, our pdfs or the stock market.
     You will receive the answer as well as the source of it. 
     """)
-    
+
     gr.HTML("""
         <script>
             window.onload = function() {
@@ -398,12 +407,12 @@ with gr.Blocks(title="Partnership Day Demo", theme=theme) as demo:
 
     with gr.Row(): 
         with gr.Column():
-            input_text = gr.Textbox(label="Your Question")
+            input_text = gr.Textbox(label = "", placeholder="Your Question")
             with gr.Row(): 
                 clear_btn = gr.Button("Clear", variant="secondary")
                 start_btn = gr.Button("Start", variant="primary")
 
-        output_text = gr.Textbox(label="Result") 
+        output_text = gr.Textbox(label="", placeholder= "Result") 
 
     #trigger main with both button and Enter key
     start_btn.click(fn=main, inputs=input_text, outputs=output_text)

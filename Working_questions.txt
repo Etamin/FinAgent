@@ -12,7 +12,7 @@ Stock price of Google, Apple, AccelorMittal and BGL BNP Paribas today/x days/mon
 
 SQL:
 More complex: How much money was transferred from account number 3 on 18.02.2025?
-How much money was transferred on 15.02.2025?
+What is the total amount of money transferred on 15.02.2025?
 What is the description of transaction no. 1 - 14?
 How often was debit/credit used on account 1 - 10?
 
